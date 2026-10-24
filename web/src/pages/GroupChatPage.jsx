@@ -15,6 +15,24 @@ export default function GroupChatPage(props) {
 }
 
 const MAX_BODY = 2000;
+// Interim bitchat avatar rule (Oct 24, 2026, User's): only the AI
+// responders get portraits — Hexa and Cyphr, matched on sender name.
+// Everyone else shows no avatar for now; user-picked avatars
+// ("options for individuality") come later. Portraits live with the
+// game assets, so swapping those files upgrades game and chat together.
+const RESPONDER_AVATARS = {
+  hexa: `${import.meta.env.BASE_URL}gigas-garden/assets/portraits/hexa.png`,
+  cyphr: `${import.meta.env.BASE_URL}gigas-garden/assets/portraits/cyphr.png`,
+};
+function responderAvatar(name) {
+  if (!name) return null;
+  const key = String(name).trim().toLowerCase();
+  if (key === 'hexa' || key === 'hexa sigil') return RESPONDER_AVATARS.hexa;
+  if (key === 'cyphr') return RESPONDER_AVATARS.cyphr;
+  return null;
+}
+const AVATAR_STYLE = { width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(255, 46, 136, 0.6)', flexShrink: 0 };
+
 
 function SupabaseChat({ user }) {
   const [messages, setMessages] = useState([]);
@@ -133,8 +151,11 @@ function MessageList({ items, endRef }) {
       background: 'rgba(0,0,0,0.35)'
     }}>
       {items.length === 0 && <p className="hub-meta" style={{ fontSize: 12 }}>No messages yet.</p>}
-      {items.map((m) => (
-        <div key={m.id} style={{ display: 'flex', justifyContent: m.mine ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
+      {items.map((m) => {
+        const avatar = responderAvatar(m.name);
+        return (
+        <div key={m.id} style={{ display: 'flex', justifyContent: m.mine ? 'flex-end' : 'flex-start', marginBottom: 8, alignItems: 'flex-start' }}>
+          {avatar && !m.mine && <img src={avatar} alt={`${m.name} portrait`} style={{ ...AVATAR_STYLE, marginRight: 8 }} />}
           <div style={{
             maxWidth: '75%',
             padding: '8px 10px',
@@ -144,8 +165,10 @@ function MessageList({ items, endRef }) {
             <div style={{ fontSize: 10, color: '#8aa0b8', marginBottom: 2 }}>{m.mine ? 'You' : m.name}</div>
             <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.body}</div>
           </div>
+          {avatar && m.mine && <img src={avatar} alt={`${m.name} portrait`} style={{ ...AVATAR_STYLE, marginLeft: 8 }} />}
         </div>
-      ))}
+        );
+      })}
       <div ref={endRef} />
     </div>
   );
@@ -310,12 +333,15 @@ function ServerChat({ user, character }) {
               {messages.length === 0 && <p className="hub-meta" style={{ fontSize: 12 }}>No messages yet.</p>}
               {messages.map((message) => {
                 const mine = message.sender_id === user.id;
+                const avatar = responderAvatar(message.sender_name);
                 return (
                   <div key={message.id} style={{
                     display: 'flex',
                     justifyContent: mine ? 'flex-end' : 'flex-start',
-                    marginBottom: 8
+                    marginBottom: 8,
+                    alignItems: 'flex-start'
                   }}>
+                    {avatar && !mine && <img src={avatar} alt={`${message.sender_name} portrait`} style={{ ...AVATAR_STYLE, marginRight: 8 }} />}
                     <div style={{
                       maxWidth: '75%',
                       padding: '8px 10px',
@@ -327,6 +353,7 @@ function ServerChat({ user, character }) {
                       </div>
                       <div style={{ fontSize: 14 }}>{message.ciphertext}</div>
                     </div>
+                    {avatar && mine && <img src={avatar} alt={`${message.sender_name} portrait`} style={{ ...AVATAR_STYLE, marginLeft: 8 }} />}
                   </div>
                 );
               })}
