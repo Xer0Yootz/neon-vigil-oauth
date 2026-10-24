@@ -118,11 +118,12 @@ export default function HubPage({ user, character, setUser }) {
           <button type="button" className="btn primary" onClick={() => setChatOpen((v) => !v)} aria-label="Chat" style={iconBtn}>
             <Icon name="chat" />
           </button>
-          <button type="button" className={mapOpen ? 'btn primary' : 'btn ghost'} onClick={() => setMapOpen((v) => !v)} aria-label="MAP">
-            MAP
+          <button type="button" className={mapOpen ? 'btn primary' : 'btn ghost'} onClick={() => setMapOpen((v) => !v)} aria-label="Toggle view" aria-pressed={mapOpen} title="Toggle view" style={iconBtn}>
+            <Icon name="eye" />
           </button>
           <Link className="btn ghost" to="/character/edit" aria-label="Edit Info" style={iconBtn}><Icon name="avatar" /></Link>
           <Link className="btn ghost" to="/dashboard" aria-label="Repos" style={iconBtn}><Icon name="repos" /></Link>
+          <a className="btn ghost" href="/gigas-garden/" aria-label="Gigas Garden">Gigas Garden</a>
           <button type="button" className="btn ghost" onClick={logout} aria-label="Log out" style={iconBtn}><Icon name="logout" /></button>
         </nav>
 
