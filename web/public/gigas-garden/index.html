@@ -409,7 +409,12 @@
       #dialogue-portrait, #dialogue-portrait img, #dialogue-text.typing::after { animation: none !important; }
     }
 
-    /* TOOL button: per-tool weapon glyph + short name */
+    /* Hexa inline icons: HUD glyphs at text size inside dialogue + subtitle labels */
+    .nv-inline-ico { width: 1.25em; height: 1.25em; vertical-align: -0.28em; margin: 0 0.12em; display: inline-block; }
+    .nv-inline-ico.tone-cyan { color: var(--cyan); filter: drop-shadow(0 0 3px rgba(0,240,255,0.55)); }
+    .nv-inline-ico.tone-magenta { color: var(--magenta); filter: drop-shadow(0 0 3px rgba(255,30,138,0.55)); }
+    .nv-inline-ico.tone-lime { color: #b8ff00; filter: drop-shadow(0 0 3px rgba(184,255,0,0.5)); }
+    /* TOOL button: hammer glyph + equipped tool name */
     #tool-btn .tool-name { font-size: 10px; letter-spacing: 0.5px; }
     @media (max-width: 420px) { #tool-btn .tool-name { display: none; } }
     /* INTERACT button: glyph + short label follow what is nearby (interact / cut / gather) */
@@ -511,7 +516,7 @@
         </div>
         <div style="display:flex; gap:4px; flex-wrap:wrap;">
           <button class="hud-btn icon-btn" id="view-toggle-btn" onclick="window.NVGame.toggleView()" aria-label="Toggle view" aria-pressed="false" title="View: GARDEN (3D)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-          <button class="hud-btn icon-btn active-tool" id="tool-btn" onclick="window.NVGame.cycleTool()" aria-label="Tool: Fists (press Q to cycle)" title="Tool: FISTS (Q to cycle)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9a2 2 0 0 1 4 0"/><path d="M8 8a2 2 0 0 1 4 0"/><path d="M12 8a2 2 0 0 1 4 0"/><path d="M16 9a2 2 0 0 1 4 0"/><path d="M4 9v5a7 7 0 0 0 7 7h2a7 7 0 0 0 7-7V9"/><path d="M8 8v3"/><path d="M12 8v3"/><path d="M16 9v2"/><path d="M4 14h7a2 2 0 0 0 2-2"/></svg><span class="tool-name">FISTS</span></button>
+          <button class="hud-btn icon-btn active-tool" id="tool-btn" onclick="window.NVGame.cycleTool()" aria-label="Tool: Fists (press Q to cycle)" title="Tool: FISTS (Q to cycle)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 12-8.4 8.4a2.1 2.1 0 0 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.9-1.9a2 2 0 0 1-.6-1.4V7l-2.3-2.3a6 6 0 0 0-4.2-1.7H9l.9.8A6.2 6.2 0 0 1 12 8.4V10l2 2h1.2a2 2 0 0 1 1.4.6l1.9 1.9"/></svg><span class="tool-name">FISTS</span></button>
           <button class="hud-btn icon-btn" onclick="window.NVGame.toggleGridLog()" aria-label="Grid log" title="Grid log"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></button>
           <button class="hud-btn icon-btn" id="audio-btn" onclick="window.NVGame.toggleAudio()" aria-label="Sound" title="Sound: on" aria-pressed="true"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
         </div>
@@ -609,7 +614,7 @@
 
       <div class="action-cluster">
         <button class="hud-btn icon-btn" id="interact-btn" data-action="interact" onclick="window.NVGame.interactNearest()" aria-label="Interact (E or Space)" title="Interact (E / Space)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 14a8 8 0 0 1-8 8"/><path d="M18 11v-1a2 2 0 0 0-4 0"/><path d="M14 10V9a2 2 0 0 0-4 0v1"/><path d="M10 9.5V4a2 2 0 0 0-4 0v10"/><path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg><span class="act-name">INTERACT</span></button>
-        <button class="hud-btn" id="sync-form-btn" onclick="window.NVGame.cycleSyncForm()">SYNC-FORM: NEON</button>
+        <button class="hud-btn" id="sync-form-btn" onclick="window.NVGame.cycleSyncForm()" title="Sync: NEON (cycle synced forms)">SYNC: NEON</button>
       </div>
     </footer>
   </div>
@@ -844,10 +849,11 @@
       { who: 'guide', sys: '', text: `${guideName()} Online.` },
       { who: 'guide', sys: '[FUEL CELL: 4% — HOUSING CRACKED]', text: 'Power containment is cracked, User. Reserve power is holding the bridge.' },
       { who: 'guide', sys: '[HULL BREACH: DECK 2 | AIRLOCK: OVERGROWN | O2 SCRUBBERS: 61%]', text: 'Garden vines forced the lower airlock. Reach the bridge console first.' },
-      { who: 'guide', sys: '[CONTROLS]', text: 'Move with WASD, the arrows or the pad. E, Space or INTERACT to use things.' },
-      { who: 'guide', sys: '[VIEW: EYE ICON]', text: 'Tap the eye, or press V, to switch between Garden and Side view.' },
-      { who: 'guide', sys: '[TOOLS: WEAPON ICON]', text: 'Tap the weapon icon, or press Q, to cycle your tools. Fists for now.' },
-      { who: 'guide', sys: '[SOUND: SPEAKER ICON]', text: 'The speaker icon mutes or restores sound.' }
+      { who: 'guide', sys: '[CONTROLS: {icon:move} MOVE | {icon:interact} INTERACT]', text: 'Move {icon:move} with WASD, the arrows or the pad. E, Space or INTERACT {icon:interact} to use things.' },
+      { who: 'guide', sys: '[ACTION: {icon:interact} {icon:cut} {icon:gather}]', text: 'That button reads INTERACT {icon:interact}, CUT {icon:cut} or GATHER {icon:gather} for whatever is near you.' },
+      { who: 'guide', sys: '[VIEW: {icon:eye} EYE ICON]', text: 'Tap the eye {icon:eye}, or press V, to switch between Garden and Side view.' },
+      { who: 'guide', sys: '[TOOLS: {icon:hammer} TOOL ICON]', text: 'Tap the hammer {icon:hammer}, or press Q, to cycle your tools. Fists {icon:fist} for now.' },
+      { who: 'guide', sys: '[SOUND: {icon:sound} SPEAKER ICON]', text: 'The speaker icon {icon:sound} mutes or restores sound.' }
     ];
 
     const GRID_CREATURES = {
@@ -855,7 +861,7 @@
         id: 'hauler',
         name: 'BALT-SHELL CARRIER',
         caste: 'HAULER',
-        powerSet: '+2 Carry Capacity per synced Hauler · Sync-Form: DIG',
+        powerSet: '+2 Carry Capacity per synced Hauler · Sync: DIG',
         desc: 'Biological chitin carapace, 4% readable face, immune to acidic First Water. Moves fallen stone and salvage around the Infiniti 6 hull.',
         canSync: true
       },
@@ -863,7 +869,7 @@
         id: 'warden',
         name: 'THORN-MANTID WATCHER',
         caste: 'WARDEN',
-        powerSet: '-1 Battle Damage per synced Warden · Sync-Form: CLIMB',
+        powerSet: '-1 Battle Damage per synced Warden · Sync: CLIMB',
         desc: 'Dense pearlescent chitin, 7% readable face, zero plasma or shell sigils. Wards the hull perimeter against Republic patrols.',
         canSync: true
       },
@@ -871,7 +877,7 @@
         id: 'lumen',
         name: 'MOTH-LANTERN DRIFTER',
         caste: 'LUMEN',
-        powerSet: '+Light Radius & Reveals Hidden Finds · Sync-Form: GLIDE',
+        powerSet: '+Light Radius & Reveals Hidden Finds · Sync: GLIDE',
         desc: 'Bioluminescent wing membranes moving in ethereal drift through the fog. Reveals hidden Golden Era relics and survivor caches.',
         canSync: true
       },
@@ -879,7 +885,7 @@
         id: 'diver',
         name: 'PELAGIC CHITIN SKIMMER',
         caste: 'DIVER',
-        powerSet: 'First Water Immunity & Pool Gathering · Sync-Form: HOVER',
+        powerSet: 'First Water Immunity & Pool Gathering · Sync: HOVER',
         desc: 'Sealed biological chitin body with 6% readable face. Harvests crystal samples directly inside metal-dissolving First Water pools.',
         canSync: true
       },
@@ -1737,6 +1743,7 @@
     const DIALOGUE_REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     let typeTimer = null;
     let typeFull = '';
+    let typeUnits = [];
     function resolveSpeaker(item) {
       const id = item.who === 'guide' ? GUIDE_ID : (item.who || 'gridlog');
       const sp = SPEAKERS[id] || SPEAKERS.gridlog;
@@ -1747,7 +1754,7 @@
     function stopTyping() {
       if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
       const t = document.getElementById('dialogue-text');
-      t.textContent = typeFull;
+      t.innerHTML = typeUnits.join('');
       t.classList.remove('typing');
       document.getElementById('dialogue-box').classList.remove('speaking');
     }
@@ -1780,18 +1787,19 @@
         img.alt = '';
       }
       document.getElementById('dialogue-speaker').textContent = who.label;
-      document.getElementById('dialogue-sys').textContent = item.sys || '';
+      document.getElementById('dialogue-sys').innerHTML = renderIconText(item.sys || '');
       const textEl = document.getElementById('dialogue-text');
       typeFull = item.text;
+      typeUnits = lineUnits(item.text);
       if (DIALOGUE_REDUCED) { stopTyping(); return; }
       let n = 0;
       textEl.textContent = '';
       textEl.classList.add('typing');
       box.classList.add('speaking');
       typeTimer = setInterval(() => {
-        n = Math.min(typeFull.length, n + 1);
-        textEl.textContent = typeFull.slice(0, n);
-        if (n >= typeFull.length) stopTyping();
+        n = Math.min(typeUnits.length, n + 1);
+        textEl.innerHTML = typeUnits.slice(0, n).join('');
+        if (n >= typeUnits.length) stopTyping();
       }, 1000 / DIALOGUE_CPS);
     }
 
@@ -1806,7 +1814,18 @@
       camera.updateProjectionMatrix();
     }
 
-    // TOOL button: inline 24-grid stroke glyph per tool (same set as web/src/icons.jsx: fist, laser-cutter, machete)
+    // HUD glyphs shared by the TOOL button and Hexa's inline icons (same set as web/src/icons.jsx)
+    const HUD_ICON_PATHS = {
+      hammer: '<path d="m15 12-8.4 8.4a2.1 2.1 0 0 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.9-1.9a2 2 0 0 1-.6-1.4V7l-2.3-2.3a6 6 0 0 0-4.2-1.7H9l.9.8A6.2 6.2 0 0 1 12 8.4V10l2 2h1.2a2 2 0 0 1 1.4.6l1.9 1.9"/>',
+      eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+      sound: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
+      log: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+      sync: '<path d="M12 2L22 7V17L12 22L2 17V7Z"/><path d="M12 8L16 10.5V15.5L12 18L8 15.5V10.5Z"/>',
+      move: '<path d="M12 2v20"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/><path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/>',
+      cargo: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/>',
+      drop: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5S5 13 5 15a7 7 0 0 0 7 7z"/>'
+    };
+    // TOOL glyphs: fist, laser-cutter, machete (used in Hexa's lines and elsewhere)
     const TOOL_ICON_PATHS = {
       'FISTS': '<path d="M4 9a2 2 0 0 1 4 0"/><path d="M8 8a2 2 0 0 1 4 0"/><path d="M12 8a2 2 0 0 1 4 0"/><path d="M16 9a2 2 0 0 1 4 0"/><path d="M4 9v5a7 7 0 0 0 7 7h2a7 7 0 0 0 7-7V9"/><path d="M8 8v3"/><path d="M12 8v3"/><path d="M16 9v2"/><path d="M4 14h7a2 2 0 0 0 2-2"/>',
       'LASER CUTTER': '<rect x="2" y="8" width="11" height="6" rx="1"/><path d="M13 10h3v2h-3"/><path d="M5 14v4h3l1-4"/><path d="M18 11h1.5"/><path d="M21.5 11H22"/><path d="m19 7 1.5-1.5"/><path d="m19 15 1.5 1.5"/>',
@@ -1820,9 +1839,9 @@
       const tool = state.toolsUnlocked[state.equippedToolIdx];
       if (tool === lastToolDrawn) return;
       lastToolDrawn = tool;
-      const paths = TOOL_ICON_PATHS[tool] || TOOL_ICON_PATHS.FISTS;
+      // Main glyph is always the hammer (tool menu); the label names the equipped tool
       btn.innerHTML = '<svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-        + paths + '</svg><span class="tool-name">' + (tool === 'LASER CUTTER' ? 'LASER' : tool) + '</span>';
+        + HUD_ICON_PATHS.hammer + '</svg><span class="tool-name">' + (tool === 'LASER CUTTER' ? 'LASER' : tool) + '</span>';
       btn.title = `Tool: ${tool} (Q to cycle)`;
       btn.setAttribute('aria-label', `Tool: ${TOOL_LABEL[tool] || tool} (press Q to cycle)`);
     }
@@ -1855,6 +1874,47 @@
       if (n.id.startsWith('bug_') || n.id === 'patrol') return { action: 'interact', label: 'INTERACT', title: `Engage: ${name}` };
       return { action: 'interact', label: 'INTERACT', title: `Interact: ${name}` };
     }
+    // Inline icon tokens for dialogue: "{icon:eye}" renders the HUD glyph at text size, in HUD colours.
+    // Each token is typed as a single unit by the typewriter.
+    const INLINE_ICONS = {
+      eye:      { paths: () => HUD_ICON_PATHS.eye,              tone: 'cyan',    name: 'eye' },
+      hammer:   { paths: () => HUD_ICON_PATHS.hammer,           tone: 'magenta', name: 'tool' },
+      tool:     { paths: () => HUD_ICON_PATHS.hammer,           tone: 'magenta', name: 'tool' },
+      fist:     { paths: () => TOOL_ICON_PATHS['FISTS'],        tone: 'magenta', name: 'fists' },
+      laser:    { paths: () => TOOL_ICON_PATHS['LASER CUTTER'], tone: 'magenta', name: 'laser cutter' },
+      machete:  { paths: () => TOOL_ICON_PATHS['MACHETE'],      tone: 'magenta', name: 'machete' },
+      sound:    { paths: () => HUD_ICON_PATHS.sound,            tone: 'cyan',    name: 'sound' },
+      log:      { paths: () => HUD_ICON_PATHS.log,              tone: 'cyan',    name: 'grid log' },
+      sync:     { paths: () => HUD_ICON_PATHS.sync,             tone: 'cyan',    name: 'sync', thin: true },
+      move:     { paths: () => HUD_ICON_PATHS.move,             tone: 'cyan',    name: 'move' },
+      cargo:    { paths: () => HUD_ICON_PATHS.cargo,            tone: 'cyan',    name: 'cargo' },
+      drop:     { paths: () => HUD_ICON_PATHS.drop,             tone: 'lime',    name: 'First Water' },
+      interact: { paths: () => ACTION_ICON_PATHS.interact,      tone: 'cyan',    name: 'interact' },
+      cut:      { paths: () => ACTION_ICON_PATHS.cut,           tone: 'magenta', name: 'cut' },
+      gather:   { paths: () => ACTION_ICON_PATHS.gather,        tone: 'lime',    name: 'gather' }
+    };
+    function escHtml(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+    function inlineIconHtml(key) {
+      const ic = INLINE_ICONS[key];
+      if (!ic) return '';
+      return `<svg class="nv-inline-ico tone-${ic.tone}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${ic.thin ? 1.6 : 2.1}" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="${ic.name} icon">${ic.paths()}</svg>`;
+    }
+    // Split a line into typing units: one per character, one per {icon:key} token
+    function lineUnits(str) {
+      const units = [];
+      const re = /\{icon:([a-z-]+)\}/g;
+      let last = 0, m;
+      str = String(str || '');
+      while ((m = re.exec(str))) {
+        for (const ch of Array.from(str.slice(last, m.index))) units.push(escHtml(ch));
+        if (INLINE_ICONS[m[1]]) units.push(inlineIconHtml(m[1]));
+        last = re.lastIndex;
+      }
+      for (const ch of Array.from(str.slice(last))) units.push(escHtml(ch));
+      return units;
+    }
+    function renderIconText(str) { return lineUnits(str).join(''); }
+
     let lastActionKey = null;
     function refreshInteractButton() {
       const btn = document.getElementById('interact-btn');
@@ -1893,7 +1953,9 @@
       const viewBtn = document.getElementById('view-toggle-btn');
       viewBtn.title = `View: ${state.viewMode} (${state.viewMode === 'GARDEN' ? '3D' : '2D'})`;
       viewBtn.setAttribute('aria-pressed', String(state.viewMode === 'SIDE'));
-      document.getElementById('sync-form-btn').textContent = `SYNC-FORM: ${state.activeSyncForm}`;
+      const syncBtn = document.getElementById('sync-form-btn');
+      syncBtn.textContent = `SYNC: ${state.activeSyncForm}`;
+      syncBtn.title = `Sync: ${state.activeSyncForm} (cycle synced forms)`;
     }
 
     function openEncounter(creatureKey, isPatrol = false) {
@@ -2007,7 +2069,7 @@
           queueDialogue([{
             who: 'guide',
             sys: '[CONSOLE LINK: DIRECT ADDRESS]',
-            text: 'Telemetry is on your HUD, User. Grab the Laser Cutter from the port locker.'
+            text: 'Telemetry is on your HUD, User. Grab the Laser Cutter {icon:laser} from the port locker.'
           }]);
         } else if (nearest.id === 'locker') {
           if (!state.toolsUnlocked.includes('LASER CUTTER')) {
@@ -2019,21 +2081,21 @@
           updateHUD();
           queueDialogue([{
             who: 'guide',
-            sys: '[TOOL EQUIPPED: LASER CUTTER]',
-            text: 'Laser Cutter equipped. Three clean cuts will clear the airlock vines.'
+            sys: '[TOOL EQUIPPED: {icon:laser} LASER CUTTER]',
+            text: 'Laser Cutter {icon:laser} equipped. Three clean cuts {icon:cut} will clear the airlock vines.'
           }, {
             who: 'guide',
-            sys: '[TOOLS: WEAPON ICON]',
-            text: 'Q or the weapon icon swaps tools. It also hits Republic patrols hard.'
+            sys: '[TOOLS: {icon:hammer} TOOL ICON]',
+            text: 'Q or the hammer {icon:hammer} swaps tools. The cutter {icon:laser} also hits Republic patrols hard.'
           }]);
         } else if (nearest.id === 'vines') {
           if (tool !== 'LASER CUTTER') {
             queueDialogue([{
               who: 'guide',
-              sys: '[AIRLOCK BLOCKED]',
+              sys: '[AIRLOCK BLOCKED: {icon:cut} CUT]',
               text: state.toolsUnlocked.includes('LASER CUTTER')
-                ? 'These vines need the Laser Cutter. Press Q to switch.'
-                : 'These vines need the Laser Cutter. It is in the port locker.'
+                ? 'These vines need the Laser Cutter {icon:laser}. Press Q {icon:hammer} to switch.'
+                : 'These vines need the Laser Cutter {icon:laser}. It is in the port locker.'
             }]);
             return;
           }
@@ -2046,8 +2108,8 @@
             state.phaseStep = 4;
             document.getElementById('objective-banner').textContent = 'OBJECTIVE: Explore the Garden, gather & sync.';
             const fogLine = !state.pinkNamedOnce
-              ? 'Airlock clear, User. Pink fog over the basin; mind the First Water pools.'
-              : 'Airlock clear, User. Fog over the basin; mind the First Water pools.';
+              ? 'Airlock clear, User. Pink fog over the basin; mind the First Water {icon:drop} pools.'
+              : 'Airlock clear, User. Fog over the basin; mind the First Water {icon:drop} pools.';
             state.pinkNamedOnce = true;
             queueDialogue([{
               who: 'guide',
@@ -2064,12 +2126,12 @@
             updateHUD();
             queueDialogue([{
               who: 'guide',
-              sys: '[ARTIFACT RECOVERED: RUINS MACHETE]',
-              text: 'Machete secured. It strikes hardest against Garden creatures.'
+              sys: '[ARTIFACT RECOVERED: {icon:machete} RUINS MACHETE]',
+              text: 'Machete {icon:machete} secured. It strikes hardest against Garden creatures.'
             }, {
               who: 'guide',
-              sys: '[TOOLS: MACHETE VS LASER CUTTER]',
-              text: 'Machete for creatures, Laser Cutter for patrols. Q swaps them.'
+              sys: '[TOOLS: {icon:machete} MACHETE VS {icon:laser} LASER CUTTER]',
+              text: 'Machete {icon:machete} for creatures, Laser Cutter {icon:laser} for patrols. Q {icon:hammer} swaps them.'
             }]);
           }
         } else if (nearest.id === 'relic' || nearest.id === 'pool_sample') {
@@ -2078,8 +2140,8 @@
             updateHUD();
             queueDialogue([{
               who: 'guide',
-              sys: '[HAZARD: FIRST WATER ACIDITY]',
-              text: 'First Water eats metal, User. Sync a Diver before you gather in the pool.'
+              sys: '[HAZARD: {icon:drop} FIRST WATER ACIDITY]',
+              text: 'First Water {icon:drop} eats metal, User. Sync {icon:sync} a Diver before you gather {icon:gather} in the pool.'
             }]);
             return;
           }
@@ -2091,8 +2153,8 @@
           updateHUD();
           queueDialogue([{
             who: 'guide',
-            sys: '[SAMPLE LOGGED: +1 RESOURCE]',
-            text: `${nearest.label} stored in hull cargo, User.`
+            sys: '[SAMPLE LOGGED: {icon:gather} +1 RESOURCE]',
+            text: `${nearest.label} stored in hull cargo {icon:cargo}, User.`
           }]);
         } else if (nearest.id === 'praxia') {
           // Exact Hard Canon Approach Line
@@ -2162,8 +2224,8 @@
             updateHUD();
             queueDialogue([{
               who: 'guide',
-              sys: `[SYNC COMPLETE: ${enc.caste} ADDED TO COLONY]`,
-              text: `${enc.name} logged in the GRID LOG. The colony grows.`
+              sys: `[SYNC COMPLETE: {icon:sync} ${enc.caste} ADDED TO COLONY]`,
+              text: `${enc.name} logged in the GRID LOG {icon:log}. The colony grows.`
             }]);
             state.activeEncounter = null;
           } else {
