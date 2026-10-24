@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../icons.jsx';
 import { AUTH_MODE, GOOGLE_CLIENT_ID, loadGoogleIdentity, userFromGoogleCredential, writeSession } from '../auth.js';
+import { supabaseSignInWithGoogle } from '../supabase.js';
 
 function GoogleSignIn({ setUser }) {
   const slot = useRef(null);
@@ -16,7 +17,9 @@ function GoogleSignIn({ setUser }) {
         auto_select: true,
         callback: ({ credential }) => {
           try {
-            setUser(writeSession(userFromGoogleCredential(credential)));
+            const signedIn = writeSession(userFromGoogleCredential(credential));
+            // Same Google ID token gives chat a verified Supabase session (falls back to anonymous if not set up).
+            supabaseSignInWithGoogle(credential).finally(() => setUser(signedIn));
           } catch (e) {
             setError(e.message);
           }

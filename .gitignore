@@ -3,3 +3,5 @@ node_modules/
 backend/data/
 *.log
 .DS_Store
+web/.env.*.local
+web/dist/

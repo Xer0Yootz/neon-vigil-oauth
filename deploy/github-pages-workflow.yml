@@ -40,6 +40,8 @@ jobs:
           VITE_BASE: /neon-vigil-oauth/
           VITE_AUTH_MODE: google
           VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

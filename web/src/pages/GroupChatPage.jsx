@@ -2,17 +2,107 @@ import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../icons.jsx';
 import { AUTH_MODE } from '../auth.js';
+import { supabase, ROOM_ID, ensureChatSession } from '../supabase.js';
 
 const DISCORD_SERVER_ID = '';
 
-// The Neon Vigil room stores messages through the backend (/api/bitchat). A static build (GitHub Pages) has no
-// backend yet, so it shows that plainly instead of failing requests.
+// The Neon Vigil room. Server mode: the backend (/api/bitchat). Static build (GitHub Pages): Supabase, with
+// live updates over Realtime. Without Supabase settings in the build it says so plainly instead of failing.
 export default function GroupChatPage(props) {
-  if (AUTH_MODE !== 'server') return <ChatOffline {...props} />;
-  return <ServerChat {...props} />;
+  if (AUTH_MODE === 'server') return <ServerChat {...props} />;
+  if (supabase) return <SupabaseChat {...props} />;
+  return <ChatOffline {...props} />;
 }
 
-function ChatOffline({ user }) {
+const MAX_BODY = 2000;
+
+function SupabaseChat({ user }) {
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const [status, setStatus] = useState('Connecting');
+  const [uid, setUid] = useState('');
+  const [sending, setSending] = useState(false);
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    let live = true;
+    let channel = null;
+    const add = (row) => setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+    (async () => {
+      try {
+        // Reading is open to everyone; posting needs a Supabase session. If that fails, still show the room.
+        try {
+          const session = await ensureChatSession();
+          if (live) setUid(session.user.id);
+        } catch (e) {
+          if (live) setError(e.message);
+        }
+        if (!live) return;
+        channel = supabase
+          .channel(`room:${ROOM_ID}`)
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${ROOM_ID}` }, (payload) => add(payload.new))
+          .subscribe((s) => live && setStatus(s === 'SUBSCRIBED' ? 'Live' : s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' ? 'Live updates paused' : 'Connecting'));
+        const { data, error: readErr } = await supabase
+          .from('messages')
+          .select('id, user_id, user_name, body, created_at')
+          .eq('room_id', ROOM_ID)
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (!live) return;
+        if (readErr) throw readErr;
+        setMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          return [...data.reverse().filter((m) => !seen.has(m.id)), ...prev];
+        });
+      } catch (e) {
+        if (live) { setError(e.message || 'Chat failed to load'); setStatus('Offline'); }
+      }
+    })();
+    return () => { live = false; if (channel) supabase.removeChannel(channel); };
+  }, []);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const send = async (event) => {
+    event.preventDefault();
+    setError('');
+    const body = text.trim();
+    if (!body || !uid || sending) return;
+    if (body.length > MAX_BODY) { setError(`Keep it under ${MAX_BODY} characters.`); return; }
+    setSending(true);
+    const { data, error: sendErr } = await supabase
+      .from('messages')
+      .insert({ room_id: ROOM_ID, user_id: uid, user_name: (user.name || 'User').slice(0, 60), body })
+      .select('id, user_id, user_name, body, created_at')
+      .single();
+    setSending(false);
+    if (sendErr) { setError(sendErr.message || 'Send failed'); return; }
+    setText('');
+    setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]));
+  };
+
+  return (
+    <ChatFrame user={user} status={status}>
+      <MessageList
+        items={messages.map((m) => ({ id: m.id, mine: m.user_id === uid, name: m.user_name, body: m.body }))}
+        endRef={endRef}
+      />
+      <form className="form" onSubmit={send}>
+        <label>
+          <span>Message</span>
+          <input value={text} maxLength={MAX_BODY} onChange={(e) => setText(e.target.value)} placeholder="Type a message" />
+        </label>
+        {error && <p className="error">{error}</p>}
+        <button className="btn primary" type="submit" aria-label="Send" disabled={!uid || sending}>Send</button>
+      </form>
+    </ChatFrame>
+  );
+}
+
+function ChatFrame({ user, status, children }) {
   return (
     <main className="page-shell">
       <div className="panel">
@@ -22,9 +112,50 @@ function ChatOffline({ user }) {
           <p className="hub-meta">{user.name}</p>
         </div>
         <p><Link to="/hub" className="btn ghost" aria-label="Back" style={{ display: 'inline-flex', width: 40, height: 40, padding: 0, marginBottom: 12 }}><Icon name="back" /></Link></p>
-        <p className="hub-meta">The Neon Vigil room is not connected on this build. Chat needs the chat server, which this static page does not have yet.</p>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
+          <span className="btn primary" aria-label="Neon Vigil room">Neon Vigil</span>
+          <p className="hub-meta" style={{ fontSize: 11, margin: 0 }}>{status}</p>
+        </div>
+        {children}
       </div>
     </main>
+  );
+}
+
+function MessageList({ items, endRef }) {
+  return (
+    <div style={{
+      height: 280,
+      overflowY: 'auto',
+      border: '1px solid rgba(0, 240, 255, 0.3)',
+      padding: 10,
+      marginBottom: 10,
+      background: 'rgba(0,0,0,0.35)'
+    }}>
+      {items.length === 0 && <p className="hub-meta" style={{ fontSize: 12 }}>No messages yet.</p>}
+      {items.map((m) => (
+        <div key={m.id} style={{ display: 'flex', justifyContent: m.mine ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
+          <div style={{
+            maxWidth: '75%',
+            padding: '8px 10px',
+            background: m.mine ? 'rgba(195, 0, 255, 0.25)' : 'rgba(0, 240, 255, 0.12)',
+            border: m.mine ? '1px solid rgba(195, 0, 255, 0.5)' : '1px solid rgba(0, 240, 255, 0.4)'
+          }}>
+            <div style={{ fontSize: 10, color: '#8aa0b8', marginBottom: 2 }}>{m.mine ? 'You' : m.name}</div>
+            <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.body}</div>
+          </div>
+        </div>
+      ))}
+      <div ref={endRef} />
+    </div>
+  );
+}
+
+function ChatOffline({ user }) {
+  return (
+    <ChatFrame user={user} status="Not connected">
+      <p className="hub-meta">The Neon Vigil room is not connected on this build. It needs the Supabase settings at build time.</p>
+    </ChatFrame>
   );
 }
 

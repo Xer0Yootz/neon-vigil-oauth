@@ -79,6 +79,10 @@ export function loadGoogleIdentity() {
 
 export async function signOut() {
   clearSession();
+  if (AUTH_MODE !== 'server') {
+    const { supabaseSignOut } = await import('./supabase.js');
+    await supabaseSignOut();
+  }
   if (AUTH_MODE === 'server') {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
   }
