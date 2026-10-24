@@ -357,21 +357,66 @@
       bottom: 12px;
       left: 12px;
       right: 12px;
-      max-width: 520px;
+      max-width: 560px;
       margin: 0 auto;
       background: var(--panel-black);
-      border: 2px solid var(--cyan);
+      border: 2px solid var(--speaker-accent, var(--cyan));
       box-shadow: 4px 4px 0 var(--amethyst);
       padding: 10px 12px;
       display: none;
-      flex-direction: column;
-      gap: 6px;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 10px;
     }
+    #dialogue-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+
+    /* Speaker portrait: flat 2D side profile beside every spoken line */
+    #dialogue-portrait {
+      flex: none;
+      width: 84px;
+      height: 84px;
+      align-self: flex-start;
+      position: relative;
+      background: #000;
+      border: 2px solid var(--speaker-accent, var(--cyan));
+      box-shadow: 2px 2px 0 var(--magenta);
+      overflow: hidden;
+      display: none;
+    }
+    #dialogue-box.has-portrait #dialogue-portrait { display: block; }
+    #dialogue-portrait img {
+      width: 100%; height: 100%; display: block; object-fit: cover;
+      image-rendering: auto;
+    }
+    #dialogue-portrait::after {     /* scanline sheen so the portrait sits in the CRT layer */
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, rgba(0,0,0,0) 1px 3px);
+    }
+    /* While a line types out: subtle bob for most speakers, glow pulse for the holograms (Hexa, Cyphr). No mouth flaps. */
+    #dialogue-box.speaking.anim-bob #dialogue-portrait img { animation: nv-speak-bob 0.42s ease-in-out infinite alternate; }
+    #dialogue-box.speaking.anim-glow #dialogue-portrait { animation: nv-speak-glow 0.9s ease-in-out infinite alternate; }
+    #dialogue-box.speaking.anim-glow #dialogue-portrait img { animation: nv-speak-drift 1.8s ease-in-out infinite alternate; }
+    @keyframes nv-speak-bob { from { transform: translateY(0) scale(1.02); } to { transform: translateY(-2px) scale(1.02); } }
+    @keyframes nv-speak-drift { from { transform: scale(1.02); filter: brightness(1); } to { transform: scale(1.035); filter: brightness(1.18); } }
+    @keyframes nv-speak-glow {
+      from { box-shadow: 2px 2px 0 var(--magenta), 0 0 0 rgba(0,240,255,0); }
+      to   { box-shadow: 2px 2px 0 var(--magenta), 0 0 14px var(--speaker-accent, var(--cyan)); }
+    }
+    #dialogue-text.typing::after { content: "\258C"; color: var(--speaker-accent, var(--cyan)); animation: nv-caret 0.6s steps(1) infinite; }
+    @keyframes nv-caret { 50% { opacity: 0; } }
+    @media (max-width: 420px) { #dialogue-portrait { width: 64px; height: 64px; } }
+    @media (prefers-reduced-motion: reduce) {
+      #dialogue-portrait, #dialogue-portrait img, #dialogue-text.typing::after { animation: none !important; }
+    }
+
+    /* TOOL button: per-tool weapon glyph + short name */
+    #tool-btn .tool-name { font-size: 10px; letter-spacing: 0.5px; }
+    @media (max-width: 420px) { #tool-btn .tool-name { display: none; } }
 
     #dialogue-speaker {
       font-size: 11px;
       font-weight: bold;
-      color: var(--magenta);
+      color: var(--speaker-name, var(--magenta));
       text-transform: uppercase;
     }
 
@@ -461,9 +506,9 @@
         </div>
         <div style="display:flex; gap:4px; flex-wrap:wrap;">
           <button class="hud-btn icon-btn" id="view-toggle-btn" onclick="window.NVGame.toggleView()" aria-label="Toggle view" aria-pressed="false" title="View: GARDEN (3D)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-          <button class="hud-btn active-tool" id="tool-btn" onclick="window.NVGame.cycleTool()">TOOL: FISTS</button>
+          <button class="hud-btn icon-btn active-tool" id="tool-btn" onclick="window.NVGame.cycleTool()" aria-label="Tool: Fists (press Q to cycle)" title="Tool: FISTS (Q to cycle)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9a2 2 0 0 1 4 0"/><path d="M8 8a2 2 0 0 1 4 0"/><path d="M12 8a2 2 0 0 1 4 0"/><path d="M16 9a2 2 0 0 1 4 0"/><path d="M4 9v5a7 7 0 0 0 7 7h2a7 7 0 0 0 7-7V9"/><path d="M8 8v3"/><path d="M12 8v3"/><path d="M16 9v2"/><path d="M4 14h7a2 2 0 0 0 2-2"/></svg><span class="tool-name">FISTS</span></button>
           <button class="hud-btn icon-btn" onclick="window.NVGame.toggleGridLog()" aria-label="Grid log" title="Grid log"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></button>
-          <button class="hud-btn" id="audio-btn" onclick="window.NVGame.toggleAudio()">AUDIO: ON</button>
+          <button class="hud-btn icon-btn" id="audio-btn" onclick="window.NVGame.toggleAudio()" aria-label="Sound" title="Sound: on" aria-pressed="true"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
         </div>
       </div>
     </header>
@@ -529,12 +574,15 @@
       </section>
 
       <!-- Dialogue Overlay -->
-      <aside id="dialogue-box">
-        <div id="dialogue-speaker">HEXA SIGIL</div>
-        <div id="dialogue-sys"></div>
-        <div id="dialogue-text">Hexa Sigil Online.</div>
-        <div style="display:flex; justify-content:flex-end;">
-          <button class="hud-btn" onclick="window.NVGame.advanceDialogue()">CONTINUE ➔</button>
+      <aside id="dialogue-box" aria-live="polite">
+        <figure id="dialogue-portrait" style="margin:0;"><img id="dialogue-portrait-img" alt="" width="84" height="84" decoding="async"></figure>
+        <div id="dialogue-body">
+          <div id="dialogue-speaker">HEXA SIGIL</div>
+          <div id="dialogue-sys"></div>
+          <div id="dialogue-text">Hexa Sigil Online.</div>
+          <div style="display:flex; justify-content:flex-end;">
+            <button class="hud-btn" onclick="window.NVGame.advanceDialogue()">CONTINUE ➔</button>
+          </div>
         </div>
       </aside>
     </main>
@@ -771,22 +819,30 @@
     /* =========================================================================
        3. CANON DIALOGUE & GRID LOG DATA
        ========================================================================= */
+    /* Speaker registry: every spoken line names a speaker id and gets that speaker's flat 2D
+       side-profile portrait (assets/portraits/<id>.png, 256 px) beside the text.
+       anim: 'bob' = slight bob while the line types; 'glow' = glow pulse (holograms, no mouth flaps). */
+    const SPEAKERS = {
+      hexa:    { name: 'HEXA SIGIL',  spoken: 'Hexa Sigil', portrait: 'assets/portraits/hexa.png',   accent: '#00f0ff', nameColor: '#00f0ff', anim: 'glow' },
+      cyphr:   { name: 'CYPHR',       spoken: 'Cyphr',      portrait: 'assets/portraits/cyphr.png',  accent: '#9d4edd', nameColor: '#c9a6ff', anim: 'glow' },
+      neon:    { name: 'NEON ULTRA',  portrait: 'assets/portraits/neon.png',   accent: '#ff1e8a', nameColor: '#ff1e8a', anim: 'bob' },
+      val17:   { name: 'VAL 17',      portrait: 'assets/portraits/val17.png',  accent: '#ff6ec7', nameColor: '#ff6ec7', anim: 'bob' },
+      praxia:  { name: 'PRAXIA',      portrait: 'assets/portraits/praxia.png', accent: '#ff1e8a', nameColor: '#ffb3dd', anim: 'glow' },
+      gridlog: { name: 'GRID LOG',    portrait: null,                          accent: '#00f0ff', nameColor: '#00f0ff', anim: 'none' }
+    };
+    // In-game instructor. Swap this one value to 'cyphr' and every guide line moves to Cyphr.
+    const GUIDE_ID = 'hexa';
+    const guideName = () => SPEAKERS[GUIDE_ID].spoken || SPEAKERS[GUIDE_ID].name;
+
+    // Lines use who: 'guide' (resolves to GUIDE_ID) or a SPEAKERS id. Optional label/portrait overrides.
     const BOOT_DIALOGUE = [
-      {
-        speaker: 'HEXA SIGIL (THEY/HE)',
-        sys: '',
-        text: 'Hexa Sigil Online.'
-      },
-      {
-        speaker: 'CYPHR // INFINITI 6 OPERATING INTELLIGENCE',
-        sys: '[FUEL CELL: 4% — HOUSING CRACKED]',
-        text: 'Primary power containment is fractured, User; reserve draw is holding bridge life support.'
-      },
-      {
-        speaker: 'CYPHR // INFINITI 6 OPERATING INTELLIGENCE',
-        sys: '[HULL BREACH: DECK 2 | AIRLOCK: OVERGROWN | O2 SCRUBBERS: 61%]',
-        text: 'Garden vines have forced the lower airlock seal, User. Reach the bridge console to clear the deck lock.'
-      }
+      { who: 'guide', sys: '', text: `${guideName()} Online.` },
+      { who: 'guide', sys: '[FUEL CELL: 4% — HOUSING CRACKED]', text: 'Power containment is cracked, User. Reserve power is holding the bridge.' },
+      { who: 'guide', sys: '[HULL BREACH: DECK 2 | AIRLOCK: OVERGROWN | O2 SCRUBBERS: 61%]', text: 'Garden vines forced the lower airlock. Reach the bridge console first.' },
+      { who: 'guide', sys: '[CONTROLS]', text: 'Move with WASD, the arrows or the pad. E, Space or INTERACT to use things.' },
+      { who: 'guide', sys: '[VIEW: EYE ICON]', text: 'Tap the eye, or press V, to switch between Garden and Side view.' },
+      { who: 'guide', sys: '[TOOLS: WEAPON ICON]', text: 'Tap the weapon icon, or press Q, to cycle your tools. Fists for now.' },
+      { who: 'guide', sys: '[SOUND: SPEAKER ICON]', text: 'The speaker icon mutes or restores sound.' }
     ];
 
     const GRID_CREATURES = {
@@ -827,7 +883,7 @@
         name: 'PRAXIA',
         caste: 'CANNOT SYNC',
         powerSet: 'Pure Will of the Gigas Garden (Unsyncable)',
-        desc: '6\'3", mantis head, compound pink eyes, permanently mouthless, two tiny antennae, pearlescent chitin, dragonfly wings.',
+        desc: '6\'3", mantis head, compound pink eyes, no mouth, two tiny antennae, pearlescent chitin, dragonfly wings.',
         canSync: false
       }
     };
@@ -906,10 +962,13 @@
       if (audioUnlocked && audioEnabled && !audioStopped && !hostMuted) fadeThemeTo(audioTargetLevel());
     }
 
+    const SOUND_ON_SVG = '<svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+    const SOUND_OFF_SVG = '<svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>';
     function refreshAudioButton() {
       const btn = document.getElementById('audio-btn');
       if (!btn) return;
-      btn.textContent = `AUDIO: ${audioEnabled ? 'ON' : 'MUTE'}`;
+      btn.innerHTML = audioEnabled ? SOUND_ON_SVG : SOUND_OFF_SVG;
+      btn.title = audioEnabled ? 'Sound: on' : 'Sound: muted';
       btn.setAttribute('aria-pressed', audioEnabled ? 'true' : 'false');
       btn.classList.toggle('active-tool', !audioEnabled);
     }
@@ -1455,7 +1514,7 @@
     const creatureNodes = [haulerNode, wardenNode, lumenNode, diverNode];
     [...creatureNodes, patrolNode].forEach((n) => toonify(n.group));
 
-    // Praxia Node (6'3", Mantis Head, Compound Pink Eyes, Mouthless, Dragonfly Wings, CANNOT SYNC)
+    // Praxia Node (6'3", Mantis Head, Compound Pink Eyes, No Mouth, Dragonfly Wings, CANNOT SYNC)
     const praxiaGroup = new THREE.Group();
     praxiaGroup.position.set(0, 0, 50);
     const praxiaBody = new THREE.Mesh(
@@ -1668,18 +1727,67 @@
       renderNextDialogue();
     }
 
+    // Typewriter + speaker portrait. CONTINUE while a line is typing finishes the line first.
+    const DIALOGUE_CPS = 42;
+    const DIALOGUE_REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    let typeTimer = null;
+    let typeFull = '';
+    function resolveSpeaker(item) {
+      const id = item.who === 'guide' ? GUIDE_ID : (item.who || 'gridlog');
+      const sp = SPEAKERS[id] || SPEAKERS.gridlog;
+      const portraitId = item.portrait || id;
+      const portrait = (SPEAKERS[portraitId] && SPEAKERS[portraitId].portrait) || null;
+      return { id, sp, label: item.label || sp.name, portrait, anim: (SPEAKERS[portraitId] || sp).anim };
+    }
+    function stopTyping() {
+      if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
+      const t = document.getElementById('dialogue-text');
+      t.textContent = typeFull;
+      t.classList.remove('typing');
+      document.getElementById('dialogue-box').classList.remove('speaking');
+    }
     function renderNextDialogue() {
       const box = document.getElementById('dialogue-box');
+      if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
       if (state.dialogueQueue.length === 0) {
         box.style.display = 'none';
+        box.classList.remove('speaking');
         duckAudio(false);
         return;
       }
       const item = state.dialogueQueue[0];
+      const who = resolveSpeaker(item);
       box.style.display = 'flex';
-      document.getElementById('dialogue-speaker').textContent = item.speaker;
+      box.style.setProperty('--speaker-accent', who.sp.accent);
+      box.style.setProperty('--speaker-name', who.sp.nameColor);
+      box.dataset.speaker = who.id;
+      box.classList.remove('anim-bob', 'anim-glow');
+      if (who.anim === 'bob' || who.anim === 'glow') box.classList.add('anim-' + who.anim);
+      const img = document.getElementById('dialogue-portrait-img');
+      if (who.portrait) {
+        box.classList.add('has-portrait');
+        img.onerror = () => box.classList.remove('has-portrait'); // missing art: text-only line
+        if (img.getAttribute('src') !== who.portrait) img.src = who.portrait;
+        img.alt = `${who.label} portrait`;
+      } else {
+        box.classList.remove('has-portrait');
+        img.removeAttribute('src');
+        img.alt = '';
+      }
+      document.getElementById('dialogue-speaker').textContent = who.label;
       document.getElementById('dialogue-sys').textContent = item.sys || '';
-      document.getElementById('dialogue-text').textContent = item.text;
+      const textEl = document.getElementById('dialogue-text');
+      typeFull = item.text;
+      if (DIALOGUE_REDUCED) { stopTyping(); return; }
+      let n = 0;
+      textEl.textContent = '';
+      textEl.classList.add('typing');
+      box.classList.add('speaking');
+      typeTimer = setInterval(() => {
+        n = Math.min(typeFull.length, n + 1);
+        textEl.textContent = typeFull.slice(0, n);
+        if (n >= typeFull.length) stopTyping();
+      }, 1000 / DIALOGUE_CPS);
     }
 
     // View presentation: GARDEN = tight portrait 3rd-person; SIDE = long-lens lane + parallax layers
@@ -1691,6 +1799,27 @@
       outlineWidth.value = side ? OUTLINE_SIDE : OUTLINE_GARDEN;
       camera.fov = VIEW_FOV[state.viewMode];
       camera.updateProjectionMatrix();
+    }
+
+    // TOOL button: inline 24-grid stroke glyph per tool (same set as web/src/icons.jsx: fist, laser-cutter, machete)
+    const TOOL_ICON_PATHS = {
+      'FISTS': '<path d="M4 9a2 2 0 0 1 4 0"/><path d="M8 8a2 2 0 0 1 4 0"/><path d="M12 8a2 2 0 0 1 4 0"/><path d="M16 9a2 2 0 0 1 4 0"/><path d="M4 9v5a7 7 0 0 0 7 7h2a7 7 0 0 0 7-7V9"/><path d="M8 8v3"/><path d="M12 8v3"/><path d="M16 9v2"/><path d="M4 14h7a2 2 0 0 0 2-2"/>',
+      'LASER CUTTER': '<rect x="2" y="8" width="11" height="6" rx="1"/><path d="M13 10h3v2h-3"/><path d="M5 14v4h3l1-4"/><path d="M18 11h1.5"/><path d="M21.5 11H22"/><path d="m19 7 1.5-1.5"/><path d="m19 15 1.5 1.5"/>',
+      'MACHETE': '<path d="M8 14 18 4c1.6-1.6 4.4-.6 3.6 2.2C20.6 10 15.5 14 11 17z"/><path d="m6 14 4 4"/><path d="m3 21 5-5"/>'
+    };
+    const TOOL_LABEL = { 'FISTS': 'Fists', 'LASER CUTTER': 'Laser Cutter', 'MACHETE': 'Machete' };
+    let lastToolDrawn = null;
+    function refreshToolButton() {
+      const btn = document.getElementById('tool-btn');
+      if (!btn) return;
+      const tool = state.toolsUnlocked[state.equippedToolIdx];
+      if (tool === lastToolDrawn) return;
+      lastToolDrawn = tool;
+      const paths = TOOL_ICON_PATHS[tool] || TOOL_ICON_PATHS.FISTS;
+      btn.innerHTML = '<svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        + paths + '</svg><span class="tool-name">' + (tool === 'LASER CUTTER' ? 'LASER' : tool) + '</span>';
+      btn.title = `Tool: ${tool} (Q to cycle)`;
+      btn.setAttribute('aria-label', `Tool: ${TOOL_LABEL[tool] || tool} (press Q to cycle)`);
     }
 
     function updateHUD() {
@@ -1711,7 +1840,7 @@
       document.getElementById('hp-pill').textContent = `INTEGRITY: ${state.integrity}%`;
       document.getElementById('carry-pill').textContent = `CARRY: ${state.inventoryCount}/${carryMax}`;
       document.getElementById('colony-pill').textContent = `COLONY: ${totalColony}`;
-      document.getElementById('tool-btn').textContent = `TOOL: ${state.toolsUnlocked[state.equippedToolIdx]}`;
+      refreshToolButton();
       const viewBtn = document.getElementById('view-toggle-btn');
       viewBtn.title = `View: ${state.viewMode} (${state.viewMode === 'GARDEN' ? '3D' : '2D'})`;
       viewBtn.setAttribute('aria-pressed', String(state.viewMode === 'SIDE'));
@@ -1780,6 +1909,7 @@
       },
 
       advanceDialogue() {
+        if (typeTimer) { stopTyping(); return; } // first tap finishes the line
         state.dialogueQueue.shift();
         renderNextDialogue();
       },
@@ -1832,9 +1962,9 @@
           state.phaseStep = Math.max(state.phaseStep, 1);
           document.getElementById('objective-banner').textContent = 'OBJECTIVE: Retrieve Laser Cutter from locker.';
           queueDialogue([{
-            speaker: 'CYPHR',
+            who: 'guide',
             sys: '[CONSOLE LINK: DIRECT ADDRESS]',
-            text: 'Deck telemetry routed to your HUD, User. Retrieve the laser cutter from the port maintenance locker and sever the airlock vines.'
+            text: 'Telemetry is on your HUD, User. Grab the Laser Cutter from the port locker.'
           }]);
         } else if (nearest.id === 'locker') {
           if (!state.toolsUnlocked.includes('LASER CUTTER')) {
@@ -1845,16 +1975,22 @@
           document.getElementById('objective-banner').textContent = 'OBJECTIVE: Cut the airlock vines (3 cuts).';
           updateHUD();
           queueDialogue([{
-            speaker: 'CYPHR',
+            who: 'guide',
             sys: '[TOOL EQUIPPED: LASER CUTTER]',
-            text: 'Laser cutter online, User. Apply three clean cuts to clear the airlock vines.'
+            text: 'Laser Cutter equipped. Three clean cuts will clear the airlock vines.'
+          }, {
+            who: 'guide',
+            sys: '[TOOLS: WEAPON ICON]',
+            text: 'Q or the weapon icon swaps tools. It also hits Republic patrols hard.'
           }]);
         } else if (nearest.id === 'vines') {
           if (tool !== 'LASER CUTTER') {
             queueDialogue([{
-              speaker: 'CYPHR',
+              who: 'guide',
               sys: '[AIRLOCK BLOCKED]',
-              text: 'Equip the laser cutter from the maintenance locker to sever these vines, User.'
+              text: state.toolsUnlocked.includes('LASER CUTTER')
+                ? 'These vines need the Laser Cutter. Press Q to switch.'
+                : 'These vines need the Laser Cutter. It is in the port locker.'
             }]);
             return;
           }
@@ -1867,11 +2003,11 @@
             state.phaseStep = 4;
             document.getElementById('objective-banner').textContent = 'OBJECTIVE: Explore the Garden, gather & sync.';
             const fogLine = !state.pinkNamedOnce
-              ? 'Airlock clear, User. A dense pink fog hangs over the basin ahead; watch your footing near the First Water pools.'
-              : 'Airlock clear, User. The fog hangs over the basin ahead; watch your footing near the First Water pools.';
+              ? 'Airlock clear, User. Pink fog over the basin; mind the First Water pools.'
+              : 'Airlock clear, User. Fog over the basin; mind the First Water pools.';
             state.pinkNamedOnce = true;
             queueDialogue([{
-              speaker: 'CYPHR',
+              who: 'guide',
               sys: '[AIRLOCK SEAL: OPEN]',
               text: fogLine
             }]);
@@ -1884,9 +2020,13 @@
             nearest.group.visible = false;
             updateHUD();
             queueDialogue([{
-              speaker: 'CYPHR',
+              who: 'guide',
               sys: '[ARTIFACT RECOVERED: RUINS MACHETE]',
-              text: 'Carbon-edge machete secured from the plinth, User; it is weighted for close encounters with Garden creatures.'
+              text: 'Machete secured. It strikes hardest against Garden creatures.'
+            }, {
+              who: 'guide',
+              sys: '[TOOLS: MACHETE VS LASER CUTTER]',
+              text: 'Machete for creatures, Laser Cutter for patrols. Q swaps them.'
             }]);
           }
         } else if (nearest.id === 'relic' || nearest.id === 'pool_sample') {
@@ -1894,9 +2034,9 @@
             state.integrity = Math.max(10, state.integrity - 12);
             updateHUD();
             queueDialogue([{
-              speaker: 'CYPHR',
+              who: 'guide',
               sys: '[HAZARD: FIRST WATER ACIDITY]',
-              text: 'First Water dissolves unprotected metal on contact, User. Sync with a Diver creature before gathering inside the pool.'
+              text: 'First Water eats metal, User. Sync a Diver before you gather in the pool.'
             }]);
             return;
           }
@@ -1907,14 +2047,16 @@
           HostSDK.unlockAchievement('first_harvest');
           updateHUD();
           queueDialogue([{
-            speaker: 'CYPHR',
+            who: 'guide',
             sys: '[SAMPLE LOGGED: +1 RESOURCE]',
             text: `${nearest.label} stored in hull cargo, User.`
           }]);
         } else if (nearest.id === 'praxia') {
           // Exact Hard Canon Approach Line
           queueDialogue([{
-            speaker: 'GRID LOG // SYNC LOCK',
+            who: 'gridlog',
+            label: 'GRID LOG // SYNC LOCK',
+            portrait: 'praxia', // GRID LOG reads out Praxia; her profile shows beside the line
             sys: '[STATUS: CANNOT SYNC]',
             text: 'Praxia. You cannot sync with Praxia.'
           }]);
@@ -1948,9 +2090,9 @@
               HostSDK.unlockAchievement('patrol_repelled');
               HostSDK.reportGameOver(5150);
               queueDialogue([{
-                speaker: 'CYPHR',
+                who: 'guide',
                 sys: '[PERIMETER SECURE: REPUBLIC PATROL REPELLED]',
-                text: 'Republic vanguard unit neutralized, User. The colony around Infiniti 6 holds the basin.'
+                text: 'Republic patrol repelled, User. The colony holds the basin.'
               }]);
             }
             state.activeEncounter = null;
@@ -1976,9 +2118,9 @@
             if (totalColony >= 3) HostSDK.unlockAchievement('colony_grows');
             updateHUD();
             queueDialogue([{
-              speaker: 'CYPHR',
+              who: 'guide',
               sys: `[SYNC COMPLETE: ${enc.caste} ADDED TO COLONY]`,
-              text: `${enc.name} recorded in the GRID LOG, User. Colony infrastructure strengthened.`
+              text: `${enc.name} logged in the GRID LOG. The colony grows.`
             }]);
             state.activeEncounter = null;
           } else {
