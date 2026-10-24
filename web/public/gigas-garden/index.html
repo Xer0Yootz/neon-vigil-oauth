@@ -412,6 +412,11 @@
     /* TOOL button: per-tool weapon glyph + short name */
     #tool-btn .tool-name { font-size: 10px; letter-spacing: 0.5px; }
     @media (max-width: 420px) { #tool-btn .tool-name { display: none; } }
+    /* INTERACT button: glyph + short label follow what is nearby (interact / cut / gather) */
+    #interact-btn .act-name { font-size: 10px; letter-spacing: 0.5px; }
+    #interact-btn[data-action="cut"] { border-color: var(--magenta); color: var(--magenta); }
+    #interact-btn[data-action="gather"] { border-color: #b8ff00; color: #b8ff00; }
+    @media (max-width: 420px) { #interact-btn .act-name { display: none; } }
 
     #dialogue-speaker {
       font-size: 11px;
@@ -603,7 +608,7 @@
       </div>
 
       <div class="action-cluster">
-        <button class="hud-btn" onclick="window.NVGame.interactNearest()">INTERACT / CUT / GATHER</button>
+        <button class="hud-btn icon-btn" id="interact-btn" data-action="interact" onclick="window.NVGame.interactNearest()" aria-label="Interact (E or Space)" title="Interact (E / Space)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 14a8 8 0 0 1-8 8"/><path d="M18 11v-1a2 2 0 0 0-4 0"/><path d="M14 10V9a2 2 0 0 0-4 0v1"/><path d="M10 9.5V4a2 2 0 0 0-4 0v10"/><path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg><span class="act-name">INTERACT</span></button>
         <button class="hud-btn" id="sync-form-btn" onclick="window.NVGame.cycleSyncForm()">SYNC-FORM: NEON</button>
       </div>
     </footer>
@@ -1822,6 +1827,49 @@
       btn.setAttribute('aria-label', `Tool: ${TOOL_LABEL[tool] || tool} (press Q to cycle)`);
     }
 
+    // INTERACT button: context glyph (same set as web/src/icons.jsx: interact, cut, gather)
+    const ACTION_ICON_PATHS = {
+      interact: '<path d="M22 14a8 8 0 0 1-8 8"/><path d="M18 11v-1a2 2 0 0 0-4 0"/><path d="M14 10V9a2 2 0 0 0-4 0v1"/><path d="M10 9.5V4a2 2 0 0 0-4 0v10"/><path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+      cut: '<path d="M20.5 2.5 22 4 10.5 15.5 8.5 13.5z"/><path d="m6.5 13 4.5 4.5"/><path d="m3 21 5-5"/><path d="M3 10c1.8-3.4 4.6-5.8 8.5-7"/><path d="M14 21c3.4-1.1 5.8-3.4 7-6.5"/>',
+      gather: '<path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>'
+    };
+    // Same nearest-in-range rule interactNearest() uses (3.4 units, active nodes only)
+    function findNearestInteractable() {
+      let nearest = null;
+      let minDist = 3.4;
+      for (const n of interactables) {
+        if (!n.active) continue;
+        const d = Math.hypot(playerGroup.position.x - n.x, playerGroup.position.z - n.z);
+        if (d < minDist) { minDist = d; nearest = n; }
+      }
+      return nearest;
+    }
+    function contextActionFor(n) {
+      const name = n ? String(n.label || n.id).replace(/\s*[\(\[].*$/, '') : '';
+      if (!n) return { action: 'interact', label: 'INTERACT', title: 'Interact (E / Space)' };
+      if (n.id === 'vines') return { action: 'cut', label: 'CUT', title: `Cut: ${name} (Laser Cutter)` };
+      if (n.id === 'relic' || n.id === 'pool_sample' || n.id === 'plinth') {
+        return { action: 'gather', label: 'GATHER', title: `Gather: ${n.id === 'plinth' ? 'Ruins Machete' : name}` };
+      }
+      if (n.id === 'praxia') return { action: 'interact', label: 'INTERACT', title: `Talk: ${name}` };
+      if (n.id.startsWith('bug_') || n.id === 'patrol') return { action: 'interact', label: 'INTERACT', title: `Engage: ${name}` };
+      return { action: 'interact', label: 'INTERACT', title: `Interact: ${name}` };
+    }
+    let lastActionKey = null;
+    function refreshInteractButton() {
+      const btn = document.getElementById('interact-btn');
+      if (!btn) return;
+      const ctx = contextActionFor(findNearestInteractable());
+      const key = ctx.action + '|' + ctx.label + '|' + ctx.title;
+      if (key === lastActionKey) return;
+      lastActionKey = key;
+      btn.dataset.action = ctx.action;
+      btn.innerHTML = '<svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        + ACTION_ICON_PATHS[ctx.action] + '</svg><span class="act-name">' + ctx.label + '</span>';
+      btn.title = ctx.title + (ctx.title.indexOf('E / Space') < 0 ? ' (E / Space)' : '');
+      btn.setAttribute('aria-label', ctx.title.replace(' (E / Space)', '') + ' (E or Space)');
+    }
+
     function updateHUD() {
       const insideShip = playerGroup.position.z < 0;
       scene.fog = insideShip ? null : gardenFog;
@@ -1841,6 +1889,7 @@
       document.getElementById('carry-pill').textContent = `CARRY: ${state.inventoryCount}/${carryMax}`;
       document.getElementById('colony-pill').textContent = `COLONY: ${totalColony}`;
       refreshToolButton();
+      refreshInteractButton();
       const viewBtn = document.getElementById('view-toggle-btn');
       viewBtn.title = `View: ${state.viewMode} (${state.viewMode === 'GARDEN' ? '3D' : '2D'})`;
       viewBtn.setAttribute('aria-pressed', String(state.viewMode === 'SIDE'));
@@ -1947,13 +1996,7 @@
       },
 
       interactNearest() {
-        let nearest = null;
-        let minDist = 3.4;
-        for (const n of interactables) {
-          if (!n.active) continue;
-          const d = Math.hypot(playerGroup.position.x - n.x, playerGroup.position.z - n.z);
-          if (d < minDist) { minDist = d; nearest = n; }
-        }
+        const nearest = findNearestInteractable();
         if (!nearest) return;
 
         const tool = state.toolsUnlocked[state.equippedToolIdx];
