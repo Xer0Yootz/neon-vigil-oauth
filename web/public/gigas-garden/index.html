@@ -12,8 +12,9 @@
     ---------------------------------------------------------------------------
     GROK BOT VISUAL & FLOW STUDIO RE-PROMPT HOOKS:
     1. FLOW_STUDIO_MANIFEST: Probes hosted Autodesk Flow Studio GLBs first
-       (neon-ultra.glb, praxia.glb, garden-bugs.glb), then falls back to
-       stowaway-girl.glb, then the A-pose Niji-6 procedural cel build.
+       (neon-ultra.glb, praxia.glb, val17.glb, each with a -lite LOD), then falls
+       back to the A-pose Niji-6 procedural cel build. Creatures: CC0 GLB or
+       procedural low-poly insect per caste (assets/CREDITS.md).
     2. DRIVE_BACKDROP_MANIFEST: Wires the 5 Shared Drive plates (flat files in
        the assets folder) into zone sky-planes, SIDE parallax & viewport frames.
     3. THEME_AUDIO_PATH: External theme file (neon-vigil-theme.mp3) with
@@ -755,12 +756,18 @@
       // The -lite copies are lower LOD (fewer triangles, 1024 px base color, no normal map) for the lite tier.
       neonUltraPrimary: 'assets/neon-ultra.glb',      // Neon Ultra, 6'3"
       neonUltraLite: 'assets/neon-ultra-lite.glb',
-      playerFallbackGLB: 'assets/stowaway-girl.glb', // 1.69 m A-pose stand-in (102 KB)
       praxiaGLB: 'assets/praxia.glb',                 // Praxia, 6'3"
       praxiaLite: 'assets/praxia-lite.glb',
       valGLB: 'assets/val17.glb',                     // VAL-17 drone body (new slot, no procedural stand-in)
       valLite: 'assets/val17-lite.glb',
-      creaturePackGLB: 'assets/garden-bugs.glb'      // Optional Flow Studio biological chitin bug slot
+      // Creature slots (CC0 stand-ins until Flow Studio chitin bugs land; credits in assets/CREDITS.md).
+      // A caste set to null builds a procedural low-poly insect instead.
+      creatureGLB: {
+        hauler: null,                  // procedural shell-carrier beetle
+        warden: null,                  // procedural mantis
+        lumen: 'assets/bug-lumen.glb', // Quaternius "Wasp" (CC0), retinted violet / teal
+        diver: 'assets/bug-diver.glb'  // Quaternius "Spider" (CC0), retinted as a lime chitin skimmer
+      }
     };
 
     // Shared Drive plates, web-optimized copies stored flat in the assets folder (external files, never inlined)
@@ -1130,21 +1137,136 @@
     deckFloor.position.set(0, -0.25, -10);
     worldGroup.add(deckFloor);
 
-    // Garden Ground Plane (z: 0 to 90)
-    const gardenFloor = new THREE.Mesh(
-      new THREE.PlaneGeometry(80, 110),
-      new THREE.MeshStandardMaterial({ color: 0x0c191e, roughness: 0.85 })
-    );
+    // Garden Ground (z: 0 to 100): tileable jungle floor painted once on a canvas at boot (no image file):
+    // dark soil, moss beds, roots and leaf litter in the Neon Vigil palette. A low-frequency noise pass in the
+    // shader varies tone and moss across the field so the 8 m tile never reads as a repeat.
+    function makeJungleFloorCanvas(size = 512) {
+      let seed = 4177;
+      const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = size;
+      const g = cv.getContext('2d');
+      // wrap-aware draw: repeats a shape across the tile edges so the texture tiles seamlessly
+      const wrap = (fn) => { for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) { g.save(); g.translate(ox, oy); fn(); g.restore(); } };
+      // 1) damp soil base + soft value noise (reuses the tileable mist noise generator)
+      g.fillStyle = '#2b1f2a';
+      g.fillRect(0, 0, size, size);
+      g.globalAlpha = 0.8;
+      g.globalCompositeOperation = 'multiply';
+      g.drawImage(makeNoiseCanvas(size), 0, 0);
+      g.globalCompositeOperation = 'source-over';
+      g.globalAlpha = 1;
+      // 2) moss beds: broad teal-green patches built from overlapping soft blobs
+      for (let i = 0; i < 9; i++) {
+        const cx = rnd() * size, cy = rnd() * size;
+        for (let k = 0; k < 7; k++) {
+          const x = cx + (rnd() - 0.5) * 90, y = cy + (rnd() - 0.5) * 90, r = 26 + rnd() * 40;
+          wrap(() => {
+            const grd = g.createRadialGradient(x, y, 0, x, y, r);
+            grd.addColorStop(0, 'rgba(34,92,70,0.6)');
+            grd.addColorStop(0.6, 'rgba(26,70,58,0.35)');
+            grd.addColorStop(1, 'rgba(20,56,50,0)');
+            g.fillStyle = grd;
+            g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+          });
+        }
+        for (let k = 0; k < 160; k++) { // moss tufts
+          const x = cx + (rnd() - 0.5) * 120, y = cy + (rnd() - 0.5) * 120;
+          wrap(() => { g.fillStyle = rnd() < 0.5 ? 'rgba(70,140,104,0.5)' : 'rgba(40,104,90,0.5)'; g.fillRect(x, y, 2, 2); });
+        }
+      }
+      // 3) roots: thick violet-brown runners with a lit ridge, tapering branches
+      const root = (x, y, a, w, segs) => {
+        const pts = [[x, y]];
+        for (let s = 0; s < segs; s++) { a += (rnd() - 0.5) * 0.7; x += Math.cos(a) * 20; y += Math.sin(a) * 20; pts.push([x, y]); }
+        wrap(() => {
+          g.lineCap = 'round'; g.lineJoin = 'round';
+          for (const [lw, col] of [[w + 3, 'rgba(10,6,10,0.8)'], [w, 'rgba(66,40,52,1)'], [Math.max(1, w * 0.35), 'rgba(120,82,104,0.7)']]) {
+            g.lineWidth = lw; g.strokeStyle = col;
+            g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+            for (let p = 1; p < pts.length; p++) g.lineTo(pts[p][0], pts[p][1]);
+            g.stroke();
+          }
+        });
+        return pts;
+      };
+      for (let i = 0; i < 5; i++) {
+        const pts = root(rnd() * size, rnd() * size, rnd() * Math.PI * 2, 7 + rnd() * 5, 14 + Math.floor(rnd() * 8));
+        for (let k = 0; k < 3; k++) { const q = pts[2 + Math.floor(rnd() * (pts.length - 3))]; root(q[0], q[1], rnd() * Math.PI * 2, 3 + rnd() * 2, 4 + Math.floor(rnd() * 4)); }
+      }
+      // 4) leaf litter in drifts: pointed leaves with a midrib, muted magenta, violet, teal and dead-leaf umber
+      const leafCols = ['#5a2648', '#46285e', '#24504c', '#4a3226', '#6e3058', '#3a2a40'];
+      const leaf = (x, y, l, rot, col) => wrap(() => {
+        g.save(); g.translate(x, y); g.rotate(rot);
+        g.fillStyle = col;
+        g.beginPath(); g.moveTo(-l, 0); g.quadraticCurveTo(0, -l * 0.8, l, 0); g.quadraticCurveTo(0, l * 0.8, -l, 0); g.fill();
+        g.strokeStyle = 'rgba(12,6,12,0.55)'; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(-l, 0); g.lineTo(l * 0.9, 0); g.stroke();
+        g.restore();
+      });
+      for (let d = 0; d < 7; d++) {
+        const cx = rnd() * size, cy = rnd() * size, n = 26 + Math.floor(rnd() * 22);
+        for (let k = 0; k < n; k++) leaf(cx + (rnd() - 0.5) * 110, cy + (rnd() - 0.5) * 110, 7 + rnd() * 9, rnd() * Math.PI * 2, leafCols[Math.floor(rnd() * leafCols.length)]);
+      }
+      for (let k = 0; k < 60; k++) leaf(rnd() * size, rnd() * size, 6 + rnd() * 8, rnd() * Math.PI * 2, leafCols[Math.floor(rnd() * leafCols.length)]);
+      // 5) a few faint biolume spores
+      for (let i = 0; i < 30; i++) {
+        const x = rnd() * size, y = rnd() * size;
+        g.fillStyle = rnd() < 0.5 ? 'rgba(34,245,255,0.45)' : 'rgba(192,132,252,0.45)';
+        g.beginPath(); g.arc(x, y, 1.4, 0, Math.PI * 2); g.fill();
+      }
+      return cv;
+    }
+    const floorTex = new THREE.CanvasTexture(makeJungleFloorCanvas(512));
+    floorTex.colorSpace = THREE.SRGBColorSpace;
+    floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+    floorTex.repeat.set(13, 18); // ~6 m tiles across the 80 x 110 floor
+    floorTex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    const floorMacroTex = new THREE.CanvasTexture(makeNoiseCanvas(128));
+    floorMacroTex.wrapS = floorMacroTex.wrapT = THREE.RepeatWrapping;
+    // emissiveMap lets the moss / litter keep their own hues under the strong sky-tinted hemisphere light
+    const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, bumpMap: floorTex, bumpScale: 0.6, roughness: 0.95, metalness: 0, emissive: 0xffffff, emissiveMap: floorTex, emissiveIntensity: 0.42 });
+    floorMat.onBeforeCompile = (sh) => {
+      sh.uniforms.uMacro = { value: floorMacroTex };
+      sh.fragmentShader = sh.fragmentShader
+        .replace('void main() {', 'uniform sampler2D uMacro;\nvoid main() {')
+        .replace('#include <map_fragment>', `#include <map_fragment>
+          #ifdef USE_MAP
+            float mA = texture2D(uMacro, vMapUv * 0.071).r;
+            float mB = texture2D(uMacro, vMapUv * 0.023 + 0.37).r;
+            diffuseColor.rgb *= 0.72 + 0.6 * mA;                                        // tone drift
+            diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.7, 1.25, 1.1), smoothstep(0.45, 0.7, mB)); // mossy zones
+          #endif`);
+    };
+    const gardenFloor = new THREE.Mesh(new THREE.PlaneGeometry(80, 110), floorMat);
     gardenFloor.rotation.x = -Math.PI / 2;
     gardenFloor.position.set(0, -0.05, 45);
     worldGroup.add(gardenFloor);
 
-    // Acidic First Water Pool (z: 32 to 46)
+    // Acidic First Water Pool (z: 32 to 46): dark glassy water with a soft acid-lime rim, no hard rectangle
+    function makePoolCanvas(size = 256) {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = size;
+      const g = cv.getContext('2d');
+      const c = size / 2;
+      const grd = g.createRadialGradient(c, c, 0, c, c, c);
+      grd.addColorStop(0.0, 'rgba(6,40,40,0.92)');
+      grd.addColorStop(0.62, 'rgba(10,58,48,0.9)');
+      grd.addColorStop(0.82, 'rgba(110,160,20,0.75)');
+      grd.addColorStop(0.9, 'rgba(60,90,20,0.45)');
+      grd.addColorStop(1.0, 'rgba(0,0,0,0)');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, size, size);
+      return cv;
+    }
+    const poolTex = new THREE.CanvasTexture(makePoolCanvas(256));
+    poolTex.colorSpace = THREE.SRGBColorSpace;
     const firstWaterPool = new THREE.Mesh(
-      new THREE.PlaneGeometry(18, 12),
-      new THREE.MeshBasicMaterial({ color: 0xb8ff00, transparent: true, opacity: 0.65 })
+      new THREE.CircleGeometry(6, 48),
+      new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false })
     );
     firstWaterPool.rotation.x = -Math.PI / 2;
+    firstWaterPool.scale.set(1.45, 1, 1); // ~17 x 12 oval
     firstWaterPool.position.set(8, 0.02, 38);
     worldGroup.add(firstWaterPool);
 
@@ -1196,14 +1318,194 @@
     }
 
     mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.bridgeInterior, 0, 4.5, -19.8, 14, 8, 0x190a2e, 0.0);
-    mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.glowForest, -18, 6, 18, 26, 12, 0x1a0826, 0.28);
-    mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.biolumeCoast, 22, 6, 38, 26, 12, 0x07262e, 0.3);
+    mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.glowForest, -31, 6, 18, 26, 12, 0x1a0826, 0.28); // edge at x = -18: clear of the walk + camera (|x| <= 16)
+    mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.biolumeCoast, 31, 6, 38, 26, 12, 0x07262e, 0.3);
     mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.stripedSunCoast, 0, 8, 72, 42, 16, 0x2b0928, 0.36);
     mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.gardenMain, 0, 12, 92, 68, 24, 0x14041d, 0.42);
     // Far coast + Mega-City ruins on the horizon (soft edges so they sit inside the mist)
-    mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.sickleCoast, -24, 7, 50, 30, 20, 0x2a0a33, 0.3, 0.14);
-    mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.megaCityFloodStreet, 24, 8, 60, 30, 20, 0x220a2c, 0.34, 0.14);
+    mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.sickleCoast, -34, 7, 50, 30, 20, 0x2a0a33, 0.3, 0.14);
+    mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.megaCityFloodStreet, 34, 8, 60, 30, 20, 0x220a2c, 0.34, 0.14);
     mountBackdropPlate(DRIVE_BACKDROP_MANIFEST.megaCityGardenRing, -26, 11, 86, 33, 22, 0x1e0a2a, 0.4, 0.14);
+
+    // ROCK FORMATIONS + MEGA-CITY RUINS (procedural, garden view only; no files to download).
+    // Everything stays outside the walk corridor (|x| <= 18, z -2..70) and off the follow-camera path.
+    const gardenScenery = new THREE.Group();
+    gardenPlates.add(gardenScenery);
+    const sceneryRand = (() => { let s = 90210; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; })();
+
+    // Basalt column clusters: one instanced hex prism (base at y = 0), scaled per column
+    const basaltGeo = new THREE.CylinderGeometry(0.82, 1, 1, 6, 1);
+    basaltGeo.translate(0, 0.5, 0);
+    function makeBasaltCanvas() {
+      const cv = document.createElement('canvas');
+      cv.width = 128; cv.height = 256;
+      const g = cv.getContext('2d');
+      g.fillStyle = '#3a3046';
+      g.fillRect(0, 0, 128, 256);
+      g.globalCompositeOperation = 'multiply';
+      g.drawImage(makeNoiseCanvas(128), 0, 0, 128, 256);
+      g.globalCompositeOperation = 'source-over';
+      for (let i = 0; i < 9; i++) { // horizontal fracture bands
+        const y = sceneryRand() * 256;
+        g.fillStyle = 'rgba(12,8,16,0.7)'; g.fillRect(0, y, 128, 1.5 + sceneryRand() * 2);
+        g.fillStyle = 'rgba(120,104,140,0.25)'; g.fillRect(0, y + 2, 128, 1);
+      }
+      for (let i = 0; i < 3; i++) { // faint violet crystal veins
+        let x = sceneryRand() * 128, y = 0;
+        g.strokeStyle = 'rgba(176,120,255,0.55)'; g.lineWidth = 1.2;
+        g.beginPath(); g.moveTo(x, y);
+        while (y < 256) { x += (sceneryRand() - 0.5) * 18; y += 10 + sceneryRand() * 16; g.lineTo(x, y); }
+        g.stroke();
+      }
+      return cv;
+    }
+    const basaltTex = new THREE.CanvasTexture(makeBasaltCanvas());
+    basaltTex.colorSpace = THREE.SRGBColorSpace;
+    basaltTex.wrapS = basaltTex.wrapT = THREE.RepeatWrapping;
+    const basaltMat = new THREE.MeshStandardMaterial({ map: basaltTex, color: 0x9890a8, roughness: 0.9, metalness: 0.05, flatShading: true });
+    basaltMat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('void main() {', 'varying float vRockY;\nvoid main() {')
+        .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+          #ifdef USE_INSTANCING
+            vRockY = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).y;
+          #else
+            vRockY = (modelMatrix * vec4(transformed, 1.0)).y;
+          #endif`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('void main() {', 'varying float vRockY;\nvoid main() {')
+        .replace('#include <map_fragment>', `
+          vec4 rockTexel = texture2D(map, vec2(vMapUv.x * 3.0, vRockY / 9.0));
+          diffuseColor *= rockTexel;
+          totalEmissiveRadiance += rockTexel.rgb * 0.22; // strata + violet veins stay readable under the sky-tinted light
+          diffuseColor.rgb = mix(vec3(0.05, 0.16, 0.13), diffuseColor.rgb, smoothstep(0.0, 2.2, vRockY)); // mossy foot`);
+    };
+    const crystalGeo = new THREE.ConeGeometry(1, 1, 5, 1);
+    crystalGeo.translate(0, 0.5, 0);
+    const crystalMat = new THREE.MeshStandardMaterial({ color: 0x2a1450, emissive: 0x6b2fd6, emissiveIntensity: 0.55, roughness: 0.25, metalness: 0.1, flatShading: true });
+    const spireClusters = [
+      // [x, z, height, spread]
+      [-30, 10, 14, 4], [30, 6, 12, 4], [23, 22, 16, 3], [-22, 34, 20, 3], [24, 44, 24, 4],
+      [-24, 52, 28, 4], [22, 62, 30, 4], [-22, 70, 32, 4],
+      [-14, 80, 36, 6], [12, 80, 30, 5], [36, 86, 40, 7], [-40, 90, 36, 7]
+    ];
+    const basaltPlacements = [];
+    const crystalPlacements = [];
+    for (const [cx, cz, hMax, spread] of spireClusters) {
+      const cols = 5 + Math.floor(sceneryRand() * 5);
+      for (let i = 0; i < cols; i++) {
+        const a = sceneryRand() * Math.PI * 2, d = sceneryRand() * spread;
+        const h = hMax * (0.35 + 0.65 * sceneryRand()) * (i === 0 ? 1.0 : 0.85);
+        const r = 0.9 + sceneryRand() * 1.4;
+        basaltPlacements.push([cx + Math.cos(a) * d, cz + Math.sin(a) * d, r, i === 0 ? hMax : h, (sceneryRand() - 0.5) * 0.08]);
+      }
+      const shards = 2 + Math.floor(sceneryRand() * 3);
+      for (let i = 0; i < shards; i++) {
+        const a = sceneryRand() * Math.PI * 2, d = spread * (0.6 + sceneryRand() * 0.6);
+        crystalPlacements.push([cx + Math.cos(a) * d, cz + Math.sin(a) * d, 0.5 + sceneryRand() * 0.7, 3 + sceneryRand() * hMax * 0.35, (sceneryRand() - 0.5) * 0.5]);
+      }
+    }
+    // keep every piece beside the walk corridor and follow camera (player and camera stay within |x| <= 16)
+    const clearOfPath = (p) => {
+      if (p[1] > -4 && p[1] < 74 && Math.abs(p[0]) - p[2] < 19.5) p[0] = Math.sign(p[0] || 1) * (19.5 + p[2]);
+      return p;
+    };
+    basaltPlacements.forEach(clearOfPath);
+    crystalPlacements.forEach(clearOfPath);
+    function instanceSet(geo, mat, list) {
+      const im = new THREE.InstancedMesh(geo, mat, list.length);
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+      list.forEach(([x, z, r, h, tilt], i) => {
+        e.set(tilt, sceneryRand() * Math.PI, tilt * 0.6);
+        q.setFromEuler(e);
+        m4.compose(new THREE.Vector3(x, -0.2, z), q, new THREE.Vector3(r, h, r));
+        im.setMatrixAt(i, m4);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      gardenScenery.add(im);
+      return im;
+    }
+    instanceSet(basaltGeo, basaltMat, basaltPlacements);
+    instanceSet(crystalGeo, crystalMat, crystalPlacements);
+
+    // Megastructure ruins: broken towers with a faint violet window grid, snapped girders and exposed frames
+    function makeWindowCanvas() {
+      const cv = document.createElement('canvas');
+      cv.width = 64; cv.height = 128;
+      const g = cv.getContext('2d');
+      g.fillStyle = '#000';
+      g.fillRect(0, 0, 64, 128);
+      for (let y = 4; y < 128; y += 8) for (let x = 4; x < 64; x += 8) {
+        const lit = sceneryRand();
+        if (lit < 0.22) { g.fillStyle = lit < 0.05 ? '#d9b8ff' : '#7a4cc9'; g.fillRect(x, y, 4, 4); }
+      }
+      return cv;
+    }
+    const windowTex = new THREE.CanvasTexture(makeWindowCanvas());
+    windowTex.colorSpace = THREE.SRGBColorSpace;
+    windowTex.wrapS = windowTex.wrapT = THREE.RepeatWrapping;
+    windowTex.magFilter = THREE.NearestFilter;
+    const ruinShellMat = new THREE.MeshStandardMaterial({ color: 0x15111e, roughness: 0.88, metalness: 0.2, flatShading: true });
+    const girderMat = new THREE.MeshStandardMaterial({ color: 0x241c30, roughness: 0.7, metalness: 0.5 });
+    function towerMaterial(w, h) {
+      const t = windowTex.clone();
+      t.repeat.set(Math.max(1, Math.round(w / 2.5)), Math.max(1, Math.round(h / 5)));
+      t.needsUpdate = true;
+      return new THREE.MeshStandardMaterial({ color: 0x15111e, roughness: 0.85, metalness: 0.25, emissive: 0xb08cff, emissiveMap: t, emissiveIntensity: 0.55 });
+    }
+    function buildRuinTower(x, z, w, d, h, lean) {
+      const tower = new THREE.Group();
+      tower.position.set(x, 0, z);
+      tower.rotation.set(0, sceneryRand() * Math.PI, lean);
+      const mat = towerMaterial(w, h);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      body.position.y = h / 2;
+      tower.add(body);
+      // broken crown: a smaller tilted block plus a snapped corner column
+      const crownH = h * 0.18;
+      const crown = new THREE.Mesh(new THREE.BoxGeometry(w * 0.62, crownH, d * 0.7), ruinShellMat);
+      crown.position.set(w * 0.16, h + crownH * 0.42, 0);
+      crown.rotation.z = 0.22 + sceneryRand() * 0.2;
+      tower.add(crown);
+      const stub = new THREE.Mesh(new THREE.BoxGeometry(w * 0.16, h * 0.24, d * 0.16), ruinShellMat);
+      stub.position.set(-w * 0.42, h + h * 0.12, d * 0.42);
+      tower.add(stub);
+      // exposed frame: columns and floor beams above the break
+      const frameH = h * 0.22;
+      for (const sx of [-1, 1]) {
+        const col = new THREE.Mesh(new THREE.BoxGeometry(0.28, frameH, 0.28), girderMat);
+        col.position.set(sx * w * 0.42, h + frameH / 2, -d * 0.42);
+        tower.add(col);
+      }
+      for (let k = 1; k <= 3; k++) {
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.22, 0.22), girderMat);
+        beam.position.set(0, h + frameH * (k / 3) - 0.2, -d * 0.42);
+        beam.rotation.z = (sceneryRand() - 0.5) * 0.18 * k;
+        tower.add(beam);
+      }
+      // snapped girders jutting out of the side
+      for (let k = 0; k < 2; k++) {
+        const len = w * (0.7 + sceneryRand() * 0.8);
+        const gird = new THREE.Mesh(new THREE.BoxGeometry(len, 0.3, 0.3), girderMat);
+        gird.position.set(w / 2 + len * 0.4, h * (0.45 + 0.35 * sceneryRand()), (sceneryRand() - 0.5) * d);
+        gird.rotation.z = -0.35 - sceneryRand() * 0.5;
+        tower.add(gird);
+      }
+      gardenScenery.add(tower);
+      return tower;
+    }
+    const RUIN_TOWERS = [
+      // [x, z, w, d, h, lean]  flanking the Sutro Baths approach, then a skyline row past the baths
+      [-22, 64, 6, 6, 36, 0.03], [-30, 74, 7, 6, 44, -0.04], [-40, 58, 8, 7, 30, 0.06],
+      [22, 66, 6, 5, 40, -0.03], [30, 76, 8, 7, 48, 0.04], [42, 56, 7, 7, 32, -0.06],
+      [-10, 84, 6, 6, 42, -0.03], [8, 88, 8, 7, 36, 0.05], [-44, 96, 8, 8, 50, -0.05], [44, 94, 9, 7, 40, 0.03]
+    ];
+    RUIN_TOWERS.forEach((t) => buildRuinTower(...t));
+    // fallen girder span between two flanking spires, low on the left horizon
+    const fallenSpan = new THREE.Mesh(new THREE.BoxGeometry(26, 0.6, 0.6), girderMat);
+    fallenSpan.position.set(-36, 9, 62);
+    fallenSpan.rotation.set(0, 1.2, 0.32);
+    gardenScenery.add(fallenSpan);
 
     // SIDE view: three-layer parallax from real depth (camera at x = -26 looking +x).
     // Screen speed vs the lane: near strip ~2.2x, mid plates ~0.45x, far plate ~0.27x.
@@ -1627,22 +1929,14 @@
       gltfLoader.load(order[0], onLoad, undefined, () => gltfLoader.load(order[1], onLoad, undefined, onFail));
     }
 
-    // Probe Flow Studio GLB (tiered) -> Fallback GLB -> Procedural
+    // Probe Flow Studio GLB (tiered: hi/lite) -> Procedural
     function probePlayerModel() {
       loadTieredGLB(
         FLOW_STUDIO_MANIFEST.neonUltraPrimary,
         FLOW_STUDIO_MANIFEST.neonUltraLite,
         (gltf) => { mountPlayerModel(gltf); },
         () => {
-          if (glbMounts.player) return; // a LOD swap failed: keep the copy already mounted
-          gltfLoader.load(
-            FLOW_STUDIO_MANIFEST.playerFallbackGLB,
-            (gltf) => { mountPlayerModel(gltf); },
-            undefined,
-            () => {
-              // Keeps A-pose procedural Neon Ultra active
-            }
-          );
+          // both Flow Studio copies failed (or a LOD swap failed): keep whatever is mounted, else procedural Neon Ultra
         }
       );
     }
@@ -1683,15 +1977,16 @@
     probeValModel();
 
     // Weak-device step-down for the character models (skipped when ?gfx= is forced, like the tier guard):
-    // after a mount, average 120 frames; under 28 fps on the hi LOD reloads the lite LOD, under 28 fps on the
-    // lite LOD puts the procedural stand-ins back (Neon, Praxia) and hides VAL-17.
+    // after a mount, average 120 frames; under 28 fps on the hi LOD reloads the lite LOD. The lite LOD is kept
+    // unless the device is truly struggling (under 12 fps), only then the procedural stand-ins come back.
     function watchModelCost(dt) {
       if (modelGuard.done || GFX_FORCED || !(glbMounts.player || glbMounts.praxia || glbMounts.val)) return;
       modelGuard.frames++;
       if (modelGuard.frames <= 60 || dt > 500) return;
       modelGuard.acc += dt;
       if (modelGuard.frames < 180) return;
-      const slow = modelGuard.acc / (modelGuard.frames - 60) > 1000 / 28;
+      const avgMs = modelGuard.acc / (modelGuard.frames - 60);
+      const slow = avgMs > 1000 / (glbLod === 'hi' ? 28 : 12);
       armModelGuard();
       if (!slow) { modelGuard.done = true; return; }
       if (glbLod === 'hi') {
@@ -1707,21 +2002,141 @@
       if (glbMounts.val) { valGroup.remove(glbMounts.val); glbMounts.val = null; }
     }
 
-    // Optional creature pack: a child named after each caste is used if present, else the whole scene
-    gltfLoader.load(FLOW_STUDIO_MANIFEST.creaturePackGLB, (gltf) => {
-      creatureNodes.forEach((n) => {
-        const caste = n.id.replace('bug_', '');
-        let src = null;
-        gltf.scene.traverse((o) => { if (!src && o.name && o.name.toLowerCase().includes(caste)) src = o; });
-        const model = fitModel(SkeletonUtils.clone(src || gltf.scene), MODEL_HEIGHT_BUG);
-        model.position.set(0, 0, 0);
-        fitModel(model, MODEL_HEIGHT_BUG);
-        n.mesh.visible = false;
-        n.wire.visible = false;
-        n.group.add(model);
-        toonify(model);
+    // Creature slots. Each caste first tries its own GLB (CC0 stand-ins, see assets/CREDITS.md), tinted into the
+    // Neon Vigil palette; a caste with no GLB, or a failed load, gets a procedural low-poly insect. The octahedron
+    // node stays only if even the procedural build is skipped.
+    const creatureMixers = [];
+    const BUG_TINTS = {
+      // material name -> [base color, emissive color, emissive intensity]
+      lumen: { Black: [0x1a0b2e, 0x000000, 0], Orange: [0x8a4fd8, 0x6b2fd6, 0.6], Yellow: [0xff4fb8, 0xff4fb8, 0.7], LightBlue: [0x7af7ff, 0x22f5ff, 0.9] },
+      diver: { Material: [0x1f5a50, 0x0a2a24, 0.5], 'Material.001': [0xb8ff00, 0x6a9a00, 0.7] }
+    };
+    function tintCreature(root, caste) {
+      const map = BUG_TINTS[caste] || {};
+      root.traverse((o) => {
+        if (!o.isMesh) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach((mt) => {
+          const t = map[mt.name];
+          if (!t) return;
+          mt.color.setHex(t[0]);
+          if (mt.emissive) { mt.emissive.setHex(t[1]); mt.emissiveIntensity = t[2]; }
+          if (mt.name === 'LightBlue') { mt.transparent = true; mt.opacity = 0.7; }
+        });
       });
-    }, undefined, () => { /* procedural creature nodes stay */ });
+    }
+    const BUG_HEIGHT = { hauler: 1.4, warden: 2.1, lumen: 1.2, diver: 1.0 };
+    const BUG_LIFT = { hauler: 0, warden: 0, lumen: 0.9, diver: 0 };
+    const BUG_CLIP = { lumen: 'Flying', diver: 'Idle' };
+    function mountCreature(n, model, caste) {
+      n.mesh.visible = false;
+      n.wire.visible = false;
+      if (n.bugModel) n.group.remove(n.bugModel);
+      fitModel(model, BUG_HEIGHT[caste] || MODEL_HEIGHT_BUG);
+      const holder = new THREE.Group();
+      holder.position.y = BUG_LIFT[caste] || 0;
+      holder.add(model);
+      n.bugModel = holder;
+      n.group.add(holder);
+      toonify(model);
+    }
+    // Procedural low-poly insects (hauler: shell carrier beetle, warden: mantis; also the fallback for the GLB castes)
+    function buildProceduralBug(caste) {
+      const g = new THREE.Group();
+      const shell = new THREE.MeshStandardMaterial({ color: 0x1b2a4a, roughness: 0.35, metalness: 0.3, flatShading: true });
+      const dark = new THREE.MeshStandardMaterial({ color: 0x0b0710, roughness: 0.6, flatShading: true });
+      const glowCyan = new THREE.MeshBasicMaterial({ color: NEON_HDR(0x22f5ff, 1.6) });
+      const glowPink = new THREE.MeshBasicMaterial({ color: NEON_HDR(0xff4fb8, 1.8) });
+      const leg = (x, z, len, spreadDir, lift = 0.5) => {
+        const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, len, 5), dark);
+        const lower = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.035, len * 1.1, 5), dark);
+        const hip = new THREE.Group();
+        hip.position.set(x, lift, z);
+        upper.position.set(spreadDir * len * 0.42, len * 0.2, 0);
+        upper.rotation.z = -spreadDir * 1.1;
+        lower.position.set(spreadDir * len * 0.86, -len * 0.12, 0);
+        lower.rotation.z = spreadDir * 0.35;
+        hip.add(upper, lower);
+        g.add(hip);
+      };
+      if (caste === 'hauler' || caste === 'diver') {
+        // domed carapace, plated back, small head, mandibles, glowing cargo pod
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), shell);
+        body.scale.set(1, 0.75, 1.35);
+        body.position.y = 0.45;
+        const belly = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.6, 0.18, 10), dark);
+        belly.scale.z = 1.3; belly.position.y = 0.42;
+        const seam = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 1.9), glowCyan);
+        seam.position.set(0, 1.0, 0); seam.rotation.x = 0.02;
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), dark);
+        head.position.set(0, 0.5, 1.05);
+        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), glowPink);
+        const eyeR = eyeL.clone();
+        eyeL.position.set(-0.15, 0.6, 1.25); eyeR.position.set(0.15, 0.6, 1.25);
+        for (const s of [-1, 1]) {
+          const mand = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.36, 5), dark);
+          mand.position.set(s * 0.12, 0.4, 1.38); mand.rotation.x = Math.PI / 2; mand.rotation.z = -s * 0.5;
+          g.add(mand);
+        }
+        const pod = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 0), glowCyan);
+        pod.position.set(0, 1.12, -0.3);
+        g.add(body, belly, seam, head, eyeL, eyeR, pod);
+        for (const z of [-0.5, 0, 0.5]) for (const s of [-1, 1]) leg(s * 0.55, z, 0.7, s, 0.42);
+        if (caste === 'diver') { body.material = new THREE.MeshStandardMaterial({ color: 0x163a22, emissive: 0x3d5c00, emissiveIntensity: 0.4, flatShading: true }); pod.material = new THREE.MeshBasicMaterial({ color: NEON_HDR(0xb8ff00, 1.4) }); }
+      } else {
+        // mantis / moth: long abdomen, upright thorax, triangular head with compound eyes, raptorial forelegs, wings
+        const isMoth = caste === 'lumen';
+        const chit = new THREE.MeshStandardMaterial({ color: isMoth ? 0x5a2f99 : 0x9a2a5e, emissive: isMoth ? 0x2a0f55 : 0x3a0a22, emissiveIntensity: 0.5, roughness: 0.4, flatShading: true });
+        const limb = new THREE.MeshStandardMaterial({ color: isMoth ? 0x2a1450 : 0x3a0f26, roughness: 0.5, flatShading: true });
+        const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), chit);
+        abdomen.scale.set(0.8, 0.7, 2.2); abdomen.position.set(0, 0.62, -0.5); abdomen.rotation.x = -0.18;
+        const thorax = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.11, 0.9, 6), chit);
+        thorax.position.set(0, 1.0, 0.3); thorax.rotation.x = 0.45;
+        const head = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.3, 3), chit);
+        head.rotation.x = Math.PI; head.position.set(0, 1.5, 0.52);
+        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.085, 6, 5), glowPink);
+        const eyeR = eyeL.clone();
+        eyeL.position.set(-0.17, 1.58, 0.52); eyeR.position.set(0.17, 1.58, 0.52);
+        g.add(abdomen, thorax, head, eyeL, eyeR);
+        const wingMat = new THREE.MeshStandardMaterial({ color: isMoth ? 0xc084fc : 0x2a7a6a, emissive: isMoth ? 0x6b2fd6 : 0x0f4a40, emissiveIntensity: 0.6, transparent: true, opacity: 0.7, side: THREE.DoubleSide, flatShading: true });
+        for (const s of [-1, 1]) {
+          // wings folded flat along the abdomen (mantis) or spread wide (moth)
+          const wing = new THREE.Mesh(new THREE.CircleGeometry(isMoth ? 0.7 : 0.5, 6), wingMat);
+          wing.scale.set(isMoth ? 1 : 0.32, isMoth ? 0.7 : 1.5, 1);
+          wing.rotation.set(-Math.PI / 2 - 0.12, 0, isMoth ? 0 : s * 0.12);
+          wing.position.set(s * (isMoth ? 0.62 : 0.1), 0.86, -0.45);
+          g.add(wing);
+          if (!isMoth) {
+            // raptorial foreleg: femur angled forward-down from the thorax, spined tibia folded back up
+            const femur = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.055, 0.5, 5), limb);
+            femur.position.set(s * 0.1, 1.05, 0.68); femur.rotation.x = 1.1;
+            const tibia = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.46, 5), chit);
+            tibia.position.set(s * 0.1, 1.14, 0.78); tibia.rotation.x = -0.35;
+            g.add(femur, tibia);
+          }
+        }
+        // four walking legs from the thorax base
+        for (const z of [-0.05, 0.25]) for (const s of [-1, 1]) leg(s * 0.08, z, 0.6, s, 0.66);
+      }
+      return g;
+    }
+    function mountProceduralBug(n, caste) { mountCreature(n, buildProceduralBug(caste), caste); }
+    creatureNodes.forEach((n) => {
+      const caste = n.id.replace('bug_', '');
+      const url = FLOW_STUDIO_MANIFEST.creatureGLB[caste];
+      if (!url) { mountProceduralBug(n, caste); return; }
+      mountProceduralBug(n, caste); // shows at once; the GLB swaps in when it lands
+      gltfLoader.load(url, (gltf) => {
+        tintCreature(gltf.scene, caste);
+        mountCreature(n, gltf.scene, caste);
+        const clip = gltf.animations.find((a) => a.name.includes(BUG_CLIP[caste] || '~')) || gltf.animations[0];
+        if (clip) {
+          const mixer = new THREE.AnimationMixer(gltf.scene);
+          mixer.clipAction(clip).play();
+          creatureMixers.push(mixer);
+        }
+      }, undefined, () => { /* procedural insect stays */ });
+    });
 
     /* =========================================================================
        8. DIALOGUE, HUD & ENCOUNTER / SYNC ENGINE
@@ -1981,6 +2396,9 @@
       state.activeEncounter = data;
       document.getElementById('enc-title').textContent = data.name;
       document.getElementById('enc-caste-tag').textContent = data.caste;
+      const statusEl = document.getElementById('enc-status-text'); // fresh fight: clear the last fight's result line
+      statusEl.textContent = 'Time your Strike, Guard, or Sync pulse when the cyan marker crosses the harmonic window.';
+      statusEl.title = '';
       document.getElementById('encounter-modal').classList.add('visible');
       duckAudio(true, 'sync');
     }
@@ -2358,6 +2776,10 @@
         }
       });
       wingsMesh.rotation.y = Math.sin(t * 3) * 0.18;
+      const nowMs = performance.now();
+      const bugDt = Math.min(0.1, (nowMs - (animate.lastBug || nowMs)) / 1000);
+      animate.lastBug = nowMs;
+      creatureMixers.forEach((m) => m.update(bugDt));
       mistTime.value = t * MIST_MOTION;
       if (mistGroup.visible) {
         for (const m of mistGroup.children) m.position.x = m.userData.baseX + Math.sin(t * 0.25 + m.userData.phase) * 2.2;
