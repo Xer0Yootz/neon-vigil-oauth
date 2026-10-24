@@ -4,6 +4,7 @@ import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
@@ -105,6 +106,20 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
     }
   }));
 }
+
+// Gigas Garden is gated: no session sends the visitor to sign-in, then back to the game. Signed-in visitors get the
+// game page with the hub/chat icons from auth-gate.js added in. The game file itself stays the standalone Remix build.
+const GAME_HTML = path.join(process.cwd(), 'web', 'public', 'gigas-garden', 'index.html');
+app.use('/gigas-garden', (req, res, next) => {
+  if (req.path !== '/' && req.path !== '/index.html') return next();
+  if (req.originalUrl === '/gigas-garden') return res.redirect('/gigas-garden/');
+  if (!req.isAuthenticated()) {
+    return res.redirect(`${FRONTEND_URL}/?next=${encodeURIComponent('/gigas-garden/')}`);
+  }
+  const html = fs.readFileSync(GAME_HTML, 'utf8')
+    .replace(/<head>/i, (m) => `${m}\n  <script src="../auth-gate.js" data-mode="server"></script>`);
+  res.set('Cache-Control', 'no-store').type('html').send(html);
+});
 
 app.use(express.static(path.join(process.cwd(), 'web', 'public')));
 
@@ -304,12 +319,12 @@ app.get('/api/bitchat/messages/:groupId', (req, res) => {
 
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => {
-  res.redirect(`${FRONTEND_URL}/dashboard`);
+  res.redirect(`${FRONTEND_URL}/hub`);
 });
 
 app.get('/auth/github', passport.authenticate('github', { scope: ['user:email', 'repo'] }));
 app.get('/auth/github/callback', passport.authenticate('github', { failureRedirect: '/' }), (req, res) => {
-  res.redirect(`${FRONTEND_URL}/dashboard`);
+  res.redirect(`${FRONTEND_URL}/hub`);
 });
 
 app.get('*', (req, res) => {

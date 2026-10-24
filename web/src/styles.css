@@ -62,3 +62,13 @@ a { color: #9ad7ff; }
 @keyframes hex-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes hex-pulse { 0%, 100% { opacity: 0.72; filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.35)); } 50% { opacity: 1; filter: drop-shadow(0 0 16px rgba(0, 240, 255, 0.9)); } }
 @keyframes emanate { from { transform: translate(-50%, -50%) scale(0.2); opacity: 1; } to { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1); opacity: 0; } }
+
+/* Hub: the two main choices after sign-in */
+.hub-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
+.hub-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 112px; padding: 14px 8px; text-decoration: none; text-align: center; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #e8f3ff; background: rgba(6, 8, 20, 0.72); border: 1px solid rgba(0, 240, 255, 0.45); box-shadow: inset 0 0 18px rgba(0, 240, 255, 0.08); transition: border-color 140ms, box-shadow 140ms, color 140ms; }
+.hub-choice svg { color: #00f0ff; filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.6)); }
+.hub-choice.play { border-color: rgba(255, 79, 216, 0.6); box-shadow: inset 0 0 18px rgba(255, 79, 216, 0.12); }
+.hub-choice.play svg { color: #ff4fd8; filter: drop-shadow(0 0 6px rgba(255, 79, 216, 0.6)); }
+.hub-choice:hover, .hub-choice:focus-visible { border-color: #ff4fd8; color: #fff; box-shadow: 0 0 14px rgba(255, 79, 216, 0.45), inset 0 0 18px rgba(255, 79, 216, 0.15); outline: none; }
+.mock-banner { margin: 10px 0; padding: 6px 8px; font-size: 11px; letter-spacing: 0.14em; color: #120012; background: repeating-linear-gradient(135deg, #ffd400 0 10px, #ffb000 10px 20px); text-align: center; font-weight: 700; }
+.gis-slot { display: flex; justify-content: center; min-height: 44px; }

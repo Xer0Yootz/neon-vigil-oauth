@@ -1,10 +1,34 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../icons.jsx';
+import { AUTH_MODE } from '../auth.js';
 
 const DISCORD_SERVER_ID = '';
 
-export default function GroupChatPage({ user, character }) {
+// The Neon Vigil room stores messages through the backend (/api/bitchat). A static build (GitHub Pages) has no
+// backend yet, so it shows that plainly instead of failing requests.
+export default function GroupChatPage(props) {
+  if (AUTH_MODE !== 'server') return <ChatOffline {...props} />;
+  return <ServerChat {...props} />;
+}
+
+function ChatOffline({ user }) {
+  return (
+    <main className="page-shell">
+      <div className="panel">
+        <div className="title-wrap">
+          <span className="tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="hex" /></span>
+          <h1>Chat</h1>
+          <p className="hub-meta">{user.name}</p>
+        </div>
+        <p><Link to="/hub" className="btn ghost" aria-label="Back" style={{ display: 'inline-flex', width: 40, height: 40, padding: 0, marginBottom: 12 }}><Icon name="back" /></Link></p>
+        <p className="hub-meta">The Neon Vigil room is not connected on this build. Chat needs the chat server, which this static page does not have yet.</p>
+      </div>
+    </main>
+  );
+}
+
+function ServerChat({ user, character }) {
   const [groups, setGroups] = useState([]);
   const [groupId, setGroupId] = useState('');
   const [messages, setMessages] = useState([]);
@@ -120,7 +144,7 @@ export default function GroupChatPage({ user, character }) {
         <div className="title-wrap">
           <span className="tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="hex" /></span>
           <h1>Chat</h1>
-          <p className="hub-meta">{user.name} / {character.codename}</p>
+          <p className="hub-meta">{user.name}{character ? ` / ${character.codename}` : ''}</p>
         </div>
         <p><Link to="/hub" className="btn ghost" aria-label="Back" style={{ ...iconBtn, marginBottom: 12 }}><Icon name="back" /></Link></p>
 
