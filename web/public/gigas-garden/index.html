@@ -415,8 +415,7 @@
     .nv-inline-ico.tone-magenta { color: var(--magenta); filter: drop-shadow(0 0 3px rgba(255,30,138,0.55)); }
     .nv-inline-ico.tone-lime { color: #b8ff00; filter: drop-shadow(0 0 3px rgba(184,255,0,0.5)); }
     /* TOOL button: hammer glyph + equipped tool name */
-    #tool-btn .tool-name { font-size: 10px; letter-spacing: 0.5px; }
-    @media (max-width: 420px) { #tool-btn .tool-name { display: none; } }
+    #tool-btn .tool-glyph { display: inline-flex; }
     /* INTERACT button: glyph + short label follow what is nearby (interact / cut / gather) */
     #interact-btn .act-name { font-size: 10px; letter-spacing: 0.5px; }
     #interact-btn[data-action="cut"] { border-color: var(--magenta); color: var(--magenta); }
@@ -516,7 +515,7 @@
         </div>
         <div style="display:flex; gap:4px; flex-wrap:wrap;">
           <button class="hud-btn icon-btn" id="view-toggle-btn" onclick="window.NVGame.toggleView()" aria-label="Toggle view" aria-pressed="false" title="View: GARDEN (3D)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-          <button class="hud-btn icon-btn active-tool" id="tool-btn" onclick="window.NVGame.cycleTool()" aria-label="Tool: Fists (press Q to cycle)" title="Tool: FISTS (Q to cycle)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 12-8.4 8.4a2.1 2.1 0 0 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.9-1.9a2 2 0 0 1-.6-1.4V7l-2.3-2.3a6 6 0 0 0-4.2-1.7H9l.9.8A6.2 6.2 0 0 1 12 8.4V10l2 2h1.2a2 2 0 0 1 1.4.6l1.9 1.9"/></svg><span class="tool-name">FISTS</span></button>
+          <button class="hud-btn icon-btn active-tool" id="tool-btn" onclick="window.NVGame.cycleTool()" aria-label="Tool: Fists (press Q to cycle)" title="Tool: FISTS (Q to cycle)"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 12-8.4 8.4a2.1 2.1 0 0 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.9-1.9a2 2 0 0 1-.6-1.4V7l-2.3-2.3a6 6 0 0 0-4.2-1.7H9l.9.8A6.2 6.2 0 0 1 12 8.4V10l2 2h1.2a2 2 0 0 1 1.4.6l1.9 1.9"/></svg><span class="tool-glyph"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9a2 2 0 0 1 4 0"/><path d="M8 8a2 2 0 0 1 4 0"/><path d="M12 8a2 2 0 0 1 4 0"/><path d="M16 9a2 2 0 0 1 4 0"/><path d="M4 9v5a7 7 0 0 0 7 7h2a7 7 0 0 0 7-7V9"/><path d="M8 8v3"/><path d="M12 8v3"/><path d="M16 9v2"/><path d="M4 14h7a2 2 0 0 0 2-2"/></svg></span></button>
           <button class="hud-btn icon-btn" onclick="window.NVGame.toggleGridLog()" aria-label="Grid log" title="Grid log"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></button>
           <button class="hud-btn icon-btn" id="audio-btn" onclick="window.NVGame.toggleAudio()" aria-label="Sound" title="Sound: on" aria-pressed="true"><svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
         </div>
@@ -531,7 +530,7 @@
         <div class="status-canon ticker title-ticker" data-ticker role="status" aria-live="off"><div class="ticker-track"><span class="ticker-run">ONLINE</span></div></div>
         <p style="font-size:12px; line-height:1.5; margin:0;">
           Stranded in the Gigas Garden, Earth 5150.
-          Wake aboard the bridge, cut the airlock vines, step into the Garden, sync with creatures, and build the colony around the hull.
+          Wake aboard the bridge, cut the airlock vines, step into the Garden, sync with creatures, and build a refuge around the hull.
         </p>
         <div style="font-size:11px; color:var(--cyan); border-left:2px solid var(--amethyst); padding-left:8px;">
           "Hexa Sigil Online."
@@ -852,7 +851,7 @@
       { who: 'guide', sys: '[CONTROLS: {icon:move} MOVE | {icon:interact} INTERACT]', text: 'Move {icon:move} with WASD, the arrows or the pad. E, Space or INTERACT {icon:interact} to use things.' },
       { who: 'guide', sys: '[ACTION: {icon:interact} {icon:cut} {icon:gather}]', text: 'That button reads INTERACT {icon:interact}, CUT {icon:cut} or GATHER {icon:gather} for whatever is near you.' },
       { who: 'guide', sys: '[VIEW: {icon:eye} EYE ICON]', text: 'Tap the eye {icon:eye}, or press V, to switch between Garden and Side view.' },
-      { who: 'guide', sys: '[TOOLS: {icon:hammer} TOOL ICON]', text: 'Tap the hammer {icon:hammer}, or press Q, to cycle your tools. Fists {icon:fist} for now.' },
+      { who: 'guide', sys: '[TOOLS: {icon:hammer} TOOL ICON]', text: 'Tap the hammer {icon:hammer}, or press Q, to cycle your tools. {icon:fist} for now.' },
       { who: 'guide', sys: '[SOUND: {icon:sound} SPEAKER ICON]', text: 'The speaker icon {icon:sound} mutes or restores sound.' }
     ];
 
@@ -1832,6 +1831,21 @@
       'MACHETE': '<path d="M8 14 18 4c1.6-1.6 4.4-.6 3.6 2.2C20.6 10 15.5 14 11 17z"/><path d="m6 14 4 4"/><path d="m3 21 5-5"/>'
     };
     const TOOL_LABEL = { 'FISTS': 'Fists', 'LASER CUTTER': 'Laser Cutter', 'MACHETE': 'Machete' };
+    const TOOL_INLINE_KEY = { 'FISTS': 'fist', 'LASER CUTTER': 'laser', 'MACHETE': 'machete' };
+    // Draw a tool glyph on a 2D canvas (encounter panel) from the same 24-grid paths
+    function drawToolGlyph(ctx, tool, x, y, size, color) {
+      const src = TOOL_ICON_PATHS[tool] || TOOL_ICON_PATHS.FISTS;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(size / 24, size / 24);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const m of src.matchAll(/<path d="([^"]+)"/g)) ctx.stroke(new Path2D(m[1]));
+      for (const m of src.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/g)) ctx.strokeRect(+m[1], +m[2], +m[3], +m[4]);
+      ctx.restore();
+    }
     let lastToolDrawn = null;
     function refreshToolButton() {
       const btn = document.getElementById('tool-btn');
@@ -1839,9 +1853,11 @@
       const tool = state.toolsUnlocked[state.equippedToolIdx];
       if (tool === lastToolDrawn) return;
       lastToolDrawn = tool;
-      // Main glyph is always the hammer (tool menu); the label names the equipped tool
+      // [hammer][equipped tool glyph]: no tool word on the button; title + aria-label name it in full
       btn.innerHTML = '<svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-        + HUD_ICON_PATHS.hammer + '</svg><span class="tool-name">' + (tool === 'LASER CUTTER' ? 'LASER' : tool) + '</span>';
+        + HUD_ICON_PATHS.hammer + '</svg><span class="tool-glyph">'
+        + '<svg class="nv-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        + (TOOL_ICON_PATHS[tool] || TOOL_ICON_PATHS.FISTS) + '</svg></span>';
       btn.title = `Tool: ${tool} (Q to cycle)`;
       btn.setAttribute('aria-label', `Tool: ${TOOL_LABEL[tool] || tool} (press Q to cycle)`);
     }
@@ -1989,7 +2005,13 @@
       const activeTool = state.toolsUnlocked[state.equippedToolIdx];
       encCtx.fillStyle = '#e2e8f0';
       encCtx.font = '11px Courier New';
-      encCtx.fillText(`EQUIPPED: ${activeTool} | WARDEN MITIGATION: -${state.syncedCounts.WARDEN}`, 36, 74);
+      // EQUIPPED: [tool glyph] (no tool word)
+      const eqLabel = 'EQUIPPED: ';
+      encCtx.fillText(eqLabel, 36, 74);
+      const glyphX = 36 + encCtx.measureText(eqLabel).width;
+      drawToolGlyph(encCtx, activeTool, glyphX, 62, 15, '#ff1e8a');
+      encCtx.fillStyle = '#e2e8f0';
+      encCtx.fillText(` | WARDEN MITIGATION: -${state.syncedCounts.WARDEN}`, glyphX + 17, 74);
 
       // Timing Bar
       encCtx.fillStyle = '#190a2e';
@@ -2069,7 +2091,7 @@
           queueDialogue([{
             who: 'guide',
             sys: '[CONSOLE LINK: DIRECT ADDRESS]',
-            text: 'Telemetry is on your HUD, User. Grab the Laser Cutter {icon:laser} from the port locker.'
+            text: 'Telemetry is on your HUD, User. Grab the {icon:laser} from the port locker.'
           }]);
         } else if (nearest.id === 'locker') {
           if (!state.toolsUnlocked.includes('LASER CUTTER')) {
@@ -2081,12 +2103,12 @@
           updateHUD();
           queueDialogue([{
             who: 'guide',
-            sys: '[TOOL EQUIPPED: {icon:laser} LASER CUTTER]',
-            text: 'Laser Cutter {icon:laser} equipped. Three clean cuts {icon:cut} will clear the airlock vines.'
+            sys: '[TOOL EQUIPPED: {icon:laser}]',
+            text: '{icon:laser} equipped. Three clean cuts {icon:cut} will clear the airlock vines.'
           }, {
             who: 'guide',
             sys: '[TOOLS: {icon:hammer} TOOL ICON]',
-            text: 'Q or the hammer {icon:hammer} swaps tools. The cutter {icon:laser} also hits Republic patrols hard.'
+            text: 'Q or the hammer {icon:hammer} swaps tools. The {icon:laser} also hits Republic patrols hard.'
           }]);
         } else if (nearest.id === 'vines') {
           if (tool !== 'LASER CUTTER') {
@@ -2094,8 +2116,8 @@
               who: 'guide',
               sys: '[AIRLOCK BLOCKED: {icon:cut} CUT]',
               text: state.toolsUnlocked.includes('LASER CUTTER')
-                ? 'These vines need the Laser Cutter {icon:laser}. Press Q {icon:hammer} to switch.'
-                : 'These vines need the Laser Cutter {icon:laser}. It is in the port locker.'
+                ? 'These vines need the {icon:laser}. Press Q {icon:hammer} to switch.'
+                : 'These vines need the {icon:laser}. It is in the port locker.'
             }]);
             return;
           }
@@ -2126,12 +2148,12 @@
             updateHUD();
             queueDialogue([{
               who: 'guide',
-              sys: '[ARTIFACT RECOVERED: {icon:machete} RUINS MACHETE]',
-              text: 'Machete {icon:machete} secured. It strikes hardest against Garden creatures.'
+              sys: '[ARTIFACT RECOVERED: {icon:machete}]',
+              text: '{icon:machete} secured. It strikes hardest against Garden creatures.'
             }, {
               who: 'guide',
-              sys: '[TOOLS: {icon:machete} MACHETE VS {icon:laser} LASER CUTTER]',
-              text: 'Machete {icon:machete} for creatures, Laser Cutter {icon:laser} for patrols. Q {icon:hammer} swaps them.'
+              sys: '[TOOLS: {icon:machete} VS {icon:laser}]',
+              text: '{icon:machete} for creatures, {icon:laser} for patrols. Q {icon:hammer} swaps them.'
             }]);
           }
         } else if (nearest.id === 'relic' || nearest.id === 'pool_sample') {
@@ -2184,9 +2206,10 @@
           const bonus = (tool === 'MACHETE' && !enc.isPatrol) || (tool === 'LASER CUTTER' && enc.isPatrol) ? 14 : 8;
           const dmg = inSweetSpot ? bonus + 10 : bonus;
           enc.hp = Math.max(0, enc.hp - dmg);
-          statusEl.textContent = inSweetSpot
-            ? `Critical strike with ${tool}! (-${dmg} HP)`
-            : `Glancing strike (-${dmg} HP).`;
+          statusEl.innerHTML = inSweetSpot
+            ? renderIconText(`Critical strike with {icon:${TOOL_INLINE_KEY[tool] || 'fist'}}! (-${dmg} HP)`)
+            : renderIconText(`Glancing strike (-${dmg} HP).`);
+          statusEl.title = inSweetSpot ? `Critical strike with ${TOOL_LABEL[tool] || tool}` : '';
 
           if (enc.hp === 0) {
             document.getElementById('encounter-modal').classList.remove('visible');
