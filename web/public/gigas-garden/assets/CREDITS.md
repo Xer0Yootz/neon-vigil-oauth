@@ -2,14 +2,14 @@
 
 ## Creature stand-ins (until the Flow Studio chitin bug meshes land)
 
-| Slot | File | Source | Author | License |
-|---|---|---|---|---|
-| Lumen (Moth-Lantern Drifter) | `bug-lumen.glb` | "Wasp", https://poly.pizza/m/3aQgc75sUR (GLB: https://static.poly.pizza/71cadefd-8e65-423a-9a95-3cdf7e012586.glb) | Quaternius | CC0 1.0 (Public Domain), no attribution required |
-| Diver (Pelagic Chitin Skimmer) | `bug-diver.glb` | "Spider", https://poly.pizza/m/yRYJiAJyiM (GLB: https://static.poly.pizza/4259fbdb-afb5-4d40-9108-363625dd6b6e.glb) | Quaternius | CC0 1.0 (Public Domain), no attribution required |
-| Hauler (Balt-Shell Carrier) | none (procedural) | Built in code (`buildProceduralBug('hauler')`): no CC0 beetle or crab was found; Poly Pizza candidates were CC-BY | - | Original |
-| Warden (Thorn-Mantid Watcher) | none (procedural) | Built in code (`buildProceduralBug('warden')`): the only free mantis found was CC-BY | - | Original |
+All four creatures use two CC0 bee models by Quaternius, cloned per creature and tinted at runtime into the Neon Vigil palette. CC0 means public domain, so no attribution is required. We credit the author anyway.
 
-Changes to both CC0 files: meshopt compression with gltf-transform (441 KB to 103 KB and 449 KB to 130 KB). Materials are tinted at runtime into the Neon Vigil palette.
+| File | Source | Author | License | Used for |
+|---|---|---|---|---|
+| `bug-armabee.glb` | "Armabee Evolved", https://poly.pizza/m/GcttdvsqsQ (GLB: https://static.poly.pizza/fb7d7a9e-5584-4e0b-a1bf-251fc9946696.glb), from the Quaternius "Ultimate Monsters" / Animated Animals set | Quaternius (https://quaternius.com) | CC0 1.0 Universal (Public Domain) | Hauler (Balt-Shell Carrier): cyan and largest. Warden (Thorn-Mantid Watcher): magenta. Both use its flying animations. |
+| `bug-bee.glb` | "Bee", https://poly.pizza/m/HvfIku26CK (GLB: https://static.poly.pizza/1dbebe1f-7ef7-4886-ae25-4395b1dae452.glb) | Quaternius (https://quaternius.com) | CC0 1.0 Universal (Public Domain) | Lumen (Moth-Lantern Drifter): violet glow. Diver (Pelagic Chitin Skimmer): acid lime and smallest. |
+
+Changes: both files were compressed with gltf-transform meshopt (183.8 KB to 70.7 KB, and 57.7 KB to 38.5 KB). Colours are tinted at runtime. If a model fails to load, its creature keeps the octahedron node.
 
 ## Environment
 
