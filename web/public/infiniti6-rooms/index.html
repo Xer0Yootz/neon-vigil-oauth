@@ -327,6 +327,9 @@
         <button type="button" class="hud-btn" id="btn-remove" title="Remove (Delete)">Remove</button>
         <button type="button" class="hud-btn" id="btn-reset" title="Restore the starter layout for this room">Reset</button>
         <button type="button" class="hud-btn" id="btn-save" title="Store the layout in this browser">Save</button>
+        <button type="button" class="hud-btn" id="btn-grid" aria-pressed="true" title="Show or hide the floor grid">Grid</button>
+        <button type="button" class="hud-btn" id="btn-walls" aria-pressed="false" title="Full walls, hide the near wall, or hide every wall">Walls</button>
+        <button type="button" class="hud-btn" id="btn-top" aria-pressed="false" title="Lock a top-down view">Top</button>
       </div>
       <p id="hint" class="hint"></p>
     </footer>
@@ -372,13 +375,13 @@
       const edit = mode === 'edit';
       if (edit) {
         hintEl.textContent = coarse
-          ? 'Edit. Tap a tile to place. Drag a piece to move it. Two fingers orbit and pinch. Double-tap a piece to turn it.'
-          : 'Edit. Click a tile to place. Drag a piece to move it. Drag the open floor or right-drag to orbit, scroll to zoom. R rotates, Delete removes.';
+          ? 'Edit. Tap a tile to place. Drag a piece to move it. Walls and Top are on the bar. Two fingers orbit and pinch.'
+          : 'Edit. Click to place, drag to move. WASD pans, Q and E raise the camera. Grid, Walls, and Top are on the bar.';
         return;
       }
       hintEl.textContent = coarse
-        ? 'Live. Drag to look around. Pinch to zoom. Edit changes the decor.'
-        : 'Live. Drag to look around, scroll to zoom. Edit changes the decor.';
+        ? 'Live. Drag to look around. Pinch out to edit the decor.'
+        : 'Live. Drag to look around, scroll to zoom. Zoom out to edit the decor.';
     }
 
     function showMode(mode) {
@@ -741,6 +744,16 @@
       let state = loadState();
       state.mode = pendingMode;
       applySceneMode = setMode;
+      let gridLines = null;
+      let showGrid = true;
+      let wallView = 'full';
+      let topLock = false;
+      let booted = false;
+      let lastPanAt = 0;
+      const held = new Set();
+      const panForward = new THREE.Vector3();
+      const panRight = new THREE.Vector3();
+      const panMove = new THREE.Vector3();
 
       function editing() {
         return state.mode === 'edit';
@@ -794,6 +807,11 @@
       controls.touches.ONE = -1;
       controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
       syncModeChrome();
+      controls.addEventListener('change', () => {
+        if (!booted || editing()) return;
+        const dist = camera.position.distanceTo(controls.target);
+        if (dist >= controls.maxDistance - 0.25) setMode('edit', 'zoom');
+      });
 
       const hemi = new THREE.HemisphereLight(0xff6fb5, 0x06141a, 0.85);
       const ambient = new THREE.AmbientLight(0x2a1244, 0.62);
@@ -885,10 +903,90 @@
         controls.touches.ONE = editing() ? -1 : THREE.TOUCH.ROTATE;
         controls.enabled = true;
         showMode(state.mode);
+        paintBuildButtons();
       }
 
-      function setMode(mode) {
+      function paintBuildButtons() {
+        const gridBtn = document.getElementById('btn-grid');
+        const wallBtn = document.getElementById('btn-walls');
+        const topBtn = document.getElementById('btn-top');
+        gridBtn.setAttribute('aria-pressed', showGrid ? 'true' : 'false');
+        topBtn.setAttribute('aria-pressed', topLock ? 'true' : 'false');
+        wallBtn.textContent = wallView === 'follow' ? 'Follow' : wallView === 'hide' ? 'Hide walls' : 'Walls';
+        wallBtn.setAttribute('aria-pressed', wallView === 'full' ? 'false' : 'true');
+      }
+
+      function applyGrid() {
+        if (gridLines) gridLines.visible = !editing() || showGrid;
+      }
+
+      function nearWall() {
+        const rm = room();
+        const dx = camera.position.x - rm.w / 2;
+        const dz = camera.position.z - rm.d / 2;
+        if (Math.abs(dx) > Math.abs(dz)) return dx > 0 ? 'e' : 'w';
+        return dz > 0 ? 'n' : 's';
+      }
+
+      function applyWalls() {
+        if (!roomRoot) return;
+        const blocked = editing() && wallView === 'follow' ? nearWall() : '';
+        roomRoot.traverse((obj) => {
+          const side = obj.userData && obj.userData.wall;
+          if (!side) return;
+          if (!editing() || wallView === 'full') obj.visible = true;
+          else if (wallView === 'hide') obj.visible = false;
+          else obj.visible = side !== blocked;
+        });
+      }
+
+      function applyTopLock() {
+        if (editing() && topLock) {
+          controls.minPolarAngle = 0.12;
+          controls.maxPolarAngle = 0.22;
+          const offset = camera.position.clone().sub(controls.target);
+          const dist = Math.max(offset.length(), controls.minDistance);
+          camera.position.set(controls.target.x, controls.target.y + dist, controls.target.z + dist * 0.08);
+          return;
+        }
+        controls.minPolarAngle = 0.18;
+        controls.maxPolarAngle = Math.PI / 2 - 0.06;
+      }
+
+      function panBuildCamera() {
+        if (!editing()) return;
+        let x = 0;
+        let z = 0;
+        let y = 0;
+        if (held.has('w')) z -= 1;
+        if (held.has('s')) z += 1;
+        if (held.has('a')) x -= 1;
+        if (held.has('d')) x += 1;
+        if (held.has('q')) y += 1;
+        if (held.has('e')) y -= 1;
+        const now = clock.getElapsedTime();
+        const dt = Math.min(0.05, lastPanAt ? now - lastPanAt : 0.016);
+        lastPanAt = now;
+        if (!x && !z && !y) return;
+        const speed = 7 * dt;
+        camera.getWorldDirection(panForward);
+        panForward.y = 0;
+        if (panForward.lengthSq() < 1e-6) panForward.set(0, 0, -1);
+        panForward.normalize();
+        panRight.setFromMatrixColumn(camera.matrixWorld, 0);
+        panRight.y = 0;
+        if (panRight.lengthSq() > 1e-6) panRight.normalize();
+        panMove.set(0, 0, 0);
+        panMove.addScaledVector(panForward, -z * speed);
+        panMove.addScaledVector(panRight, x * speed);
+        panMove.y += y * speed;
+        camera.position.add(panMove);
+        controls.target.add(panMove);
+      }
+
+      function setMode(mode, reason) {
         const next = mode === 'edit' ? 'edit' : 'live';
+        if (next === state.mode) return;
         if (next !== 'edit') {
           placeType = null;
           selectedId = null;
@@ -900,12 +998,18 @@
         }
         state.mode = next;
         pendingMode = next;
+        held.clear();
+        if (next !== 'edit') frameCamera();
         syncModeChrome();
+        applyGrid();
+        applyWalls();
+        applyTopLock();
         updateMarker();
         updateButtons();
         renderStatus();
         paintCursor();
         persist();
+        if (reason === 'zoom') setStatus('Edit');
       }
 
       function showMarker(it, color, opacity) {
@@ -1415,12 +1519,53 @@
         const ok = persist();
         setStatus(ok ? 'Layout stored in this browser' : 'Could not store the layout');
       });
+      document.getElementById('btn-grid').addEventListener('click', () => {
+        if (!editing()) return;
+        showGrid = !showGrid;
+        applyGrid();
+        paintBuildButtons();
+      });
+      document.getElementById('btn-walls').addEventListener('click', () => {
+        if (!editing()) return;
+        wallView = wallView === 'full' ? 'follow' : wallView === 'follow' ? 'hide' : 'full';
+        applyWalls();
+        paintBuildButtons();
+        setStatus(wallView === 'full' ? 'Walls shown' : wallView === 'follow' ? 'Near wall hidden' : 'Walls hidden');
+      });
+      document.getElementById('btn-top').addEventListener('click', () => {
+        if (!editing()) return;
+        topLock = !topLock;
+        applyTopLock();
+        controls.update();
+        paintBuildButtons();
+      });
+
+      window.addEventListener('keyup', (e) => {
+        const key = e.key.toLowerCase();
+        const panKey = key === 'arrowup' ? 'w'
+          : key === 'arrowdown' ? 's'
+            : key === 'arrowleft' ? 'a'
+              : key === 'arrowright' ? 'd'
+                : key;
+        held.delete(panKey);
+      });
+      window.addEventListener('blur', () => held.clear());
 
       window.addEventListener('keydown', (e) => {
         const tag = e.target && e.target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         if (!editing()) return;
         const key = e.key.toLowerCase();
+        const panKey = key === 'arrowup' ? 'w'
+          : key === 'arrowdown' ? 's'
+            : key === 'arrowleft' ? 'a'
+              : key === 'arrowright' ? 'd'
+                : key;
+        if (panKey === 'w' || panKey === 'a' || panKey === 's' || panKey === 'd' || panKey === 'q' || panKey === 'e') {
+          held.add(panKey);
+          e.preventDefault();
+          return;
+        }
         if (key === 'escape') {
           setTool(null);
           clearSelection();
@@ -1477,6 +1622,8 @@
             });
           }
         }
+        panBuildCamera();
+        if (editing() && wallView === 'follow') applyWalls();
         controls.update();
         renderer.render(scene, camera);
       }
@@ -1487,6 +1634,7 @@
       renderer.setAnimationLoop(animate);
       renderer.render(scene, camera);
       boot.hidden = true;
+      booted = true;
       window.__roomsReady = true;
 
       function box(parent, mat, sx, sy, sz, x, y, z, opts = {}) {
@@ -1494,6 +1642,7 @@
         mesh.position.set(x, y, z);
         mesh.castShadow = opts.cast !== false;
         mesh.receiveShadow = opts.receive !== false;
+        if (opts.wall) mesh.userData.wall = opts.wall;
         parent.add(mesh);
         return mesh;
       }
@@ -1664,7 +1813,7 @@
         return { z0: cz - wz / 2, z1: cz + wz / 2, cz, wz };
       }
 
-      function addPanels(along, fixed, length, hole) {
+      function addPanels(along, fixed, length, hole, side) {
         const n = Math.max(2, Math.round(length / 1.8));
         const gap = 0.12;
         const span = length - gap * (n + 1);
@@ -1674,79 +1823,84 @@
           if (along === 'z') {
             const half = pw * 0.45;
             if (hole && offset + half > hole.z0 && offset - half < hole.z1) continue;
-            box(roomRoot, mats.panel, 0.035, 1.55, pw * 0.9, fixed, 1.28, offset, { cast: false });
+            box(roomRoot, mats.panel, 0.035, 1.55, pw * 0.9, fixed, 1.28, offset, { cast: false, wall: side });
           } else {
-            box(roomRoot, mats.panel, pw * 0.9, 1.55, 0.035, offset, 1.28, fixed, { cast: false });
+            box(roomRoot, mats.panel, pw * 0.9, 1.55, 0.035, offset, 1.28, fixed, { cast: false, wall: side });
           }
         }
       }
 
-      function addWindow(axis, x, y, z, width, height) {
+      function addWindow(axis, x, y, z, width, height, side) {
         const f = 0.05;
         const y0 = y - height / 2;
         const y1 = y + height / 2;
+        const frame = { cast: false, receive: false, wall: side };
         if (axis === 'z') {
-          box(roomRoot, mats.neonCyan, width + f, f, f, x, y1, z, { cast: false, receive: false });
-          box(roomRoot, mats.neonCyan, width + f, f, f, x, y0, z, { cast: false, receive: false });
-          box(roomRoot, mats.neonCyan, f, height, f, x - width / 2, y, z, { cast: false, receive: false });
-          box(roomRoot, mats.neonCyan, f, height, f, x + width / 2, y, z, { cast: false, receive: false });
+          box(roomRoot, mats.neonCyan, width + f, f, f, x, y1, z, frame);
+          box(roomRoot, mats.neonCyan, width + f, f, f, x, y0, z, frame);
+          box(roomRoot, mats.neonCyan, f, height, f, x - width / 2, y, z, frame);
+          box(roomRoot, mats.neonCyan, f, height, f, x + width / 2, y, z, frame);
           const pane = new THREE.Mesh(new THREE.PlaneGeometry(width - 0.08, height - 0.08), mats.glass);
           pane.position.set(x, y, z);
           pane.castShadow = false;
           pane.receiveShadow = false;
+          pane.userData.wall = side;
           roomRoot.add(pane);
           return;
         }
-        box(roomRoot, mats.neonCyan, f, f, width + f, x, y1, z, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, f, f, width + f, x, y0, z, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, f, height, f, x, y, z - width / 2, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, f, height, f, x, y, z + width / 2, { cast: false, receive: false });
+        box(roomRoot, mats.neonCyan, f, f, width + f, x, y1, z, frame);
+        box(roomRoot, mats.neonCyan, f, f, width + f, x, y0, z, frame);
+        box(roomRoot, mats.neonCyan, f, height, f, x, y, z - width / 2, frame);
+        box(roomRoot, mats.neonCyan, f, height, f, x, y, z + width / 2, frame);
         const pane = new THREE.Mesh(new THREE.PlaneGeometry(width - 0.08, height - 0.08), mats.glass);
         pane.rotation.y = Math.PI / 2;
         pane.position.set(x, y, z);
         pane.castShadow = false;
         pane.receiveShadow = false;
+        pane.userData.wall = side;
         roomRoot.add(pane);
       }
 
-      function addWallAlongX(x0, x1, zCenter, holes) {
+      function addWallAlongX(x0, x1, zCenter, holes, side) {
         const H = 2.4;
         const t = 0.16;
         const y0 = WIN_Y - WIN_H / 2;
         const y1 = WIN_Y + WIN_H / 2;
         const fullW = x1 - x0;
-        box(roomRoot, mats.wall, fullW, y0, t, x0 + fullW / 2, y0 / 2, zCenter);
+        const opt = { wall: side };
+        box(roomRoot, mats.wall, fullW, y0, t, x0 + fullW / 2, y0 / 2, zCenter, opt);
         const topH = H - y1;
-        box(roomRoot, mats.wall, fullW, topH, t, x0 + fullW / 2, y1 + topH / 2, zCenter);
+        box(roomRoot, mats.wall, fullW, topH, t, x0 + fullW / 2, y1 + topH / 2, zCenter, opt);
         const ordered = holes.slice().sort((a, b) => a.x0 - b.x0);
         let cursor = x0;
         ordered.forEach((hole) => {
           const span = hole.x0 - cursor;
-          if (span > 0.02) box(roomRoot, mats.wall, span, WIN_H, t, cursor + span / 2, WIN_Y, zCenter);
+          if (span > 0.02) box(roomRoot, mats.wall, span, WIN_H, t, cursor + span / 2, WIN_Y, zCenter, opt);
           cursor = hole.x1;
         });
         const end = x1 - cursor;
-        if (end > 0.02) box(roomRoot, mats.wall, end, WIN_H, t, cursor + end / 2, WIN_Y, zCenter);
+        if (end > 0.02) box(roomRoot, mats.wall, end, WIN_H, t, cursor + end / 2, WIN_Y, zCenter, opt);
       }
 
-      function addWallAlongZ(z0, z1, xCenter, holes) {
+      function addWallAlongZ(z0, z1, xCenter, holes, side) {
         const H = 2.4;
         const t = 0.16;
         const y0 = WIN_Y - WIN_H / 2;
         const y1 = WIN_Y + WIN_H / 2;
         const fullD = z1 - z0;
-        box(roomRoot, mats.wall, t, y0, fullD, xCenter, y0 / 2, z0 + fullD / 2);
+        const opt = { wall: side };
+        box(roomRoot, mats.wall, t, y0, fullD, xCenter, y0 / 2, z0 + fullD / 2, opt);
         const topH = H - y1;
-        box(roomRoot, mats.wall, t, topH, fullD, xCenter, y1 + topH / 2, z0 + fullD / 2);
+        box(roomRoot, mats.wall, t, topH, fullD, xCenter, y1 + topH / 2, z0 + fullD / 2, opt);
         const ordered = holes.slice().sort((a, b) => a.z0 - b.z0);
         let cursor = z0;
         ordered.forEach((hole) => {
           const span = hole.z0 - cursor;
-          if (span > 0.02) box(roomRoot, mats.wall, t, WIN_H, span, xCenter, WIN_Y, cursor + span / 2);
+          if (span > 0.02) box(roomRoot, mats.wall, t, WIN_H, span, xCenter, WIN_Y, cursor + span / 2, opt);
           cursor = hole.z1;
         });
         const end = z1 - cursor;
-        if (end > 0.02) box(roomRoot, mats.wall, t, WIN_H, end, xCenter, WIN_Y, cursor + end / 2);
+        if (end > 0.02) box(roomRoot, mats.wall, t, WIN_H, end, xCenter, WIN_Y, cursor + end / 2, opt);
       }
 
       function makeSky(width, height) {
@@ -1904,34 +2058,36 @@
         }));
         lines.userData.ownMaterial = true;
         roomRoot.add(lines);
+        gridLines = lines;
 
         const north = northHoles(w);
         const side = sideHole(d);
-        addWallAlongZ(0, d, -t / 2, [side]);
-        addWallAlongZ(0, d, w + t / 2, [side]);
-        addWallAlongX(-0.02, w + 0.02, d + t / 2, north);
-        north.forEach((hole) => addWindow('z', hole.cx, WIN_Y, d - 0.02, hole.ww, WIN_H));
-        addWindow('x', 0.02, WIN_Y, side.cz, side.wz, WIN_H);
-        addWindow('x', w - 0.02, WIN_Y, side.cz, side.wz, WIN_H);
-        addPanels('z', 0.03, d, side);
-        addPanels('z', w - 0.03, d, side);
+        addWallAlongZ(0, d, -t / 2, [side], 'w');
+        addWallAlongZ(0, d, w + t / 2, [side], 'e');
+        addWallAlongX(-0.02, w + 0.02, d + t / 2, north, 'n');
+        north.forEach((hole) => addWindow('z', hole.cx, WIN_Y, d - 0.02, hole.ww, WIN_H, 'n'));
+        addWindow('x', 0.02, WIN_Y, side.cz, side.wz, WIN_H, 'w');
+        addWindow('x', w - 0.02, WIN_Y, side.cz, side.wz, WIN_H, 'e');
+        addPanels('z', 0.03, d, side, 'w');
+        addPanels('z', w - 0.03, d, side, 'e');
         addGarden(w, d, north, side);
 
         box(roomRoot, mats.neonMagenta, 0.03, 0.055, d, 0.02, 0.04, d / 2, { cast: false, receive: false });
         box(roomRoot, mats.neonMagenta, 0.03, 0.055, d, w - 0.02, 0.04, d / 2, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, 0.05, 0.04, d, 0, H + 0.02, d / 2, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, 0.05, 0.04, d, w, H + 0.02, d / 2, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, w, 0.04, 0.05, w / 2, H + 0.02, d, { cast: false, receive: false });
+        box(roomRoot, mats.neonCyan, 0.05, 0.04, d, 0, H + 0.02, d / 2, { cast: false, receive: false, wall: 'w' });
+        box(roomRoot, mats.neonCyan, 0.05, 0.04, d, w, H + 0.02, d / 2, { cast: false, receive: false, wall: 'e' });
+        box(roomRoot, mats.neonCyan, w, 0.04, 0.05, w / 2, H + 0.02, d, { cast: false, receive: false, wall: 'n' });
 
         box(roomRoot, mats.metal, w, 0.07, 0.1, w / 2, 0.035, -0.02);
         box(roomRoot, mats.neonMagenta, w, 0.028, 0.04, w / 2, 0.08, 0.01, { cast: false, receive: false });
 
         [[-0.02, -0.02], [w + 0.02, -0.02], [-0.02, d + 0.02], [w + 0.02, d + 0.02]].forEach(([x, z]) => {
-          box(roomRoot, mats.wall, 0.22, 2.55, 0.22, x, 1.2, z);
-          box(roomRoot, mats.neonCyan, 0.26, 0.05, 0.26, x, 2.5, z, { cast: false, receive: false });
+          box(roomRoot, mats.wall, 0.22, 2.55, 0.22, x, 1.2, z, { wall: 'post' });
+          box(roomRoot, mats.neonCyan, 0.26, 0.05, 0.26, x, 2.5, z, { cast: false, receive: false, wall: 'post' });
           const cap = new THREE.Sprite(mats.glowCyan);
           cap.position.set(x, 2.52, z);
           cap.scale.set(0.32, 0.32, 1);
+          cap.userData.wall = 'post';
           roomRoot.add(cap);
         });
 
@@ -1951,6 +2107,8 @@
         box(roomRoot, mats.girder, 0.16, 3.3, 0.16, -1.65, 1.45, d * 0.32);
         box(roomRoot, mats.girder, 0.14, 2.5, 0.14, w + 1.45, 1.15, d * 0.66);
         box(roomRoot, mats.girder, Math.min(3.4, w * 0.46), 0.1, 0.1, w * 0.28, 2.65, d + 1.25);
+        applyGrid();
+        applyWalls();
       }
     }
 
