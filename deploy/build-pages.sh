@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the GitHub Pages site (sign-in, hub, chat, gated Gigas Garden) into web/dist.
+# Builds the GitHub Pages site (sign-in, hub, chat, gated Gigas Garden, /site-preview/ music-site preview) into web/dist.
 # Usage: GOOGLE_CLIENT_ID=<public web client id> deploy/build-pages.sh
 # Then publish web/dist to the gh-pages branch. Only public values go in: the Google client ID, the Supabase
 # project URL and its publishable (anon) key. Never a service_role/secret key or any other API key.
@@ -17,4 +17,8 @@ case "${SUPABASE_PUBLISHABLE_KEY:-}" in
 esac
 VITE_BASE=/neon-vigil-oauth/ VITE_AUTH_MODE=google VITE_GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}" \
   VITE_SUPABASE_URL="$SUPABASE_URL" VITE_SUPABASE_ANON_KEY="${SUPABASE_PUBLISHABLE_KEY:-}" npx vite build --emptyOutDir
+# Music-site redesign preview (Signal Loop, noindex). Static files live in web/public/site-preview/ and are copied
+# by Vite; regenerate them with /workspace/site_redesign/preview_build/make_preview.py.
+test -f dist/site-preview/index.html || { echo "dist/site-preview missing" >&2; exit 1; }
+grep -q 'name="robots" content="noindex' dist/site-preview/index.html || { echo "site-preview must stay noindex" >&2; exit 1; }
 touch dist/.nojekyll
