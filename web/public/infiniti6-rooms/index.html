@@ -223,6 +223,9 @@
     }
     #radio-note { flex: 1 0 200px; margin: 0; }
 
+    #hud.mode-live .palette,
+    #hud.mode-live .actions { display: none; }
+
     .boot {
       position: fixed;
       z-index: 6;
@@ -266,6 +269,10 @@
         <button type="button" class="hud-btn" role="tab" data-room="quarters-a">Quarters A</button>
         <button type="button" class="hud-btn" role="tab" data-room="quarters-b">Quarters B</button>
         <button type="button" class="hud-btn" role="tab" data-room="mess">Mess</button>
+      </div>
+      <div class="tabs" role="group" aria-label="Mode">
+        <button type="button" class="hud-btn" id="mode-live" aria-pressed="true">Live</button>
+        <button type="button" class="hud-btn" id="mode-edit" aria-pressed="false">Edit</button>
       </div>
       <div class="status-row">
         <p id="status" aria-live="polite">Loading room…</p>
@@ -347,9 +354,51 @@
     const btnSave = document.getElementById('btn-save');
 
     const coarse = window.matchMedia('(pointer: coarse)').matches;
-    hintEl.textContent = coarse
-      ? 'Tap a tile to place. Drag a piece to move it. Two fingers orbit and pinch. Double-tap a piece to turn it.'
-      : 'Click a tile to place. Drag a piece to move it. Drag the open floor or right-drag to orbit, scroll to zoom. R rotates, Delete removes.';
+    const hudEl = document.getElementById('hud');
+    const modeLiveBtn = document.getElementById('mode-live');
+    const modeEditBtn = document.getElementById('mode-edit');
+    let pendingMode = readStoredMode();
+    let applySceneMode = null;
+
+    function readStoredMode() {
+      try {
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (data && data.mode === 'edit') return 'edit';
+      } catch (err) { /* live until a layout is stored */ }
+      return 'live';
+    }
+
+    function paintHint(mode) {
+      const edit = mode === 'edit';
+      if (edit) {
+        hintEl.textContent = coarse
+          ? 'Edit. Tap a tile to place. Drag a piece to move it. Two fingers orbit and pinch. Double-tap a piece to turn it.'
+          : 'Edit. Click a tile to place. Drag a piece to move it. Drag the open floor or right-drag to orbit, scroll to zoom. R rotates, Delete removes.';
+        return;
+      }
+      hintEl.textContent = coarse
+        ? 'Live. Drag to look around. Pinch to zoom. Edit changes the decor.'
+        : 'Live. Drag to look around, scroll to zoom. Edit changes the decor.';
+    }
+
+    function showMode(mode) {
+      const edit = mode === 'edit';
+      hudEl.classList.toggle('mode-edit', edit);
+      hudEl.classList.toggle('mode-live', !edit);
+      modeLiveBtn.setAttribute('aria-pressed', edit ? 'false' : 'true');
+      modeEditBtn.setAttribute('aria-pressed', edit ? 'true' : 'false');
+      paintHint(mode);
+    }
+
+    function chooseMode(mode) {
+      pendingMode = mode === 'edit' ? 'edit' : 'live';
+      showMode(pendingMode);
+      if (applySceneMode) applySceneMode(pendingMode);
+    }
+
+    showMode(pendingMode);
+    modeLiveBtn.addEventListener('click', () => chooseMode('live'));
+    modeEditBtn.addEventListener('click', () => chooseMode('edit'));
 
     bootRadio();
 
@@ -646,6 +695,7 @@
       function freshState() {
         return {
           active: 'quarters-a',
+          mode: 'live',
           rooms: Object.fromEntries(Object.keys(ROOMS).map((id) => [id, cloneStarter(id)])),
         };
       }
@@ -662,7 +712,8 @@
             rooms[id] = list ? sanitize(ROOMS[id], list) : cloneStarter(id);
           });
           const active = ROOMS[data.active] ? data.active : 'quarters-a';
-          return { active, rooms };
+          const mode = data.mode === 'edit' ? 'edit' : 'live';
+          return { active, rooms, mode };
         } catch (err) {
           return freshState();
         }
@@ -673,6 +724,7 @@
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
             v: 1,
             active: state.active,
+            mode: state.mode,
             rooms: state.rooms,
           }));
           savePill.textContent = 'stored';
@@ -687,6 +739,12 @@
 
       assertStarters();
       let state = loadState();
+      state.mode = pendingMode;
+      applySceneMode = setMode;
+
+      function editing() {
+        return state.mode === 'edit';
+      }
       let placeType = null;
       let placeRot = 0;
       let selectedId = null;
@@ -735,6 +793,7 @@
       controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
       controls.touches.ONE = -1;
       controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
+      syncModeChrome();
 
       const hemi = new THREE.HemisphereLight(0xff6fb5, 0x06141a, 0.85);
       const ambient = new THREE.AmbientLight(0x2a1244, 0.62);
@@ -785,7 +844,7 @@
       function renderStatus() {
         const items = currentItems();
         const n = items.length;
-        let text = room().label + ' · ' + room().w + '×' + room().d + ' · ' + n + (n === 1 ? ' piece' : ' pieces');
+        let text = (editing() ? 'Edit' : 'Live') + ' · ' + room().label + ' · ' + room().w + '×' + room().d + ' · ' + n + (n === 1 ? ' piece' : ' pieces');
         if (placeType) text += ' · placing ' + CATALOG[placeType].label + ' ' + (placeRot * 90) + '°';
         else if (selectedId && getItem(selectedId)) {
           text += ' · ' + CATALOG[getItem(selectedId).type].label + ' selected';
@@ -814,10 +873,39 @@
 
       function paintCursor() {
         const el = renderer.domElement;
-        if (gesture && gesture.dragging) el.style.cursor = 'grabbing';
+        if (!editing()) el.style.cursor = 'grab';
+        else if (gesture && gesture.dragging) el.style.cursor = 'grabbing';
         else if (placeType) el.style.cursor = 'crosshair';
         else if (hoverItem) el.style.cursor = 'pointer';
         else el.style.cursor = 'default';
+      }
+
+      function syncModeChrome() {
+        controls.mouseButtons.LEFT = editing() ? -1 : THREE.MOUSE.ROTATE;
+        controls.touches.ONE = editing() ? -1 : THREE.TOUCH.ROTATE;
+        controls.enabled = true;
+        showMode(state.mode);
+      }
+
+      function setMode(mode) {
+        const next = mode === 'edit' ? 'edit' : 'live';
+        if (next !== 'edit') {
+          placeType = null;
+          selectedId = null;
+          hoverTile = null;
+          hoverItem = null;
+          flash = '';
+          swapGhost(null);
+          cancelDrag();
+        }
+        state.mode = next;
+        pendingMode = next;
+        syncModeChrome();
+        updateMarker();
+        updateButtons();
+        renderStatus();
+        paintCursor();
+        persist();
       }
 
       function showMarker(it, color, opacity) {
@@ -851,6 +939,13 @@
       }
 
       function updateMarker() {
+        if (!editing()) {
+          marker.visible = false;
+          selBox.visible = false;
+          if (ghost) ghost.visible = false;
+          paintCursor();
+          return;
+        }
         const dragging = gesture && gesture.dragging ? getItem(gesture.itemId) : null;
         if (placeType && hoverTile && !dragging) {
           const temp = { id: '__ghost', type: placeType, x: hoverTile.x, z: hoverTile.z, rot: placeRot };
@@ -1042,6 +1137,7 @@
       }
 
       function doRotate() {
+        if (!editing()) return;
         if (placeType) {
           placeRot = (placeRot + 1) % 4;
           updateMarker();
@@ -1069,6 +1165,7 @@
       }
 
       function doRemove() {
+        if (!editing()) return;
         const it = getItem(selectedId);
         if (!it || placeType) {
           setStatus('Select a piece to remove');
@@ -1178,6 +1275,7 @@
       }
 
       function onPointerDown(e) {
+        if (!editing()) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         pointers.add(e.pointerId);
         if (pointers.size > 1) {
@@ -1203,6 +1301,7 @@
       }
 
       function onPointerMove(e) {
+        if (!editing()) return;
         if (gesture && e.pointerId === gesture.id && !multi) {
           const dist = Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y);
           if (dist > 8) gesture.moved = true;
@@ -1232,6 +1331,7 @@
       }
 
       function onPointerUp(e) {
+        if (!editing()) return;
         pointers.delete(e.pointerId);
         const g = gesture;
         const cancel = e.type === 'pointercancel';
@@ -1254,6 +1354,7 @@
       }
 
       function setTool(type) {
+        if (!editing() && type) return;
         placeType = type;
         placeRot = 0;
         if (type) selectedId = null;
@@ -1277,6 +1378,7 @@
       }
 
       function onReset() {
+        if (!editing()) return;
         const now = performance.now();
         if (now > resetUntil) {
           resetUntil = now + 2400;
@@ -1316,7 +1418,8 @@
 
       window.addEventListener('keydown', (e) => {
         const tag = e.target && e.target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (!editing()) return;
         const key = e.key.toLowerCase();
         if (key === 'escape') {
           setTool(null);
