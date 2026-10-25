@@ -492,6 +492,38 @@
       gap: 6px;
       justify-content: flex-end;
     }
+
+    /* Touch controls (coarse pointers only): always-visible move stick lower-left,
+       one-finger drag orbits the camera, pinch zooms (in to first person),
+       two-finger swipe detaches the camera, reset button returns it behind Neon. */
+    #nv-touch { display: none; }
+    html.nv-touch-ui #nv-touch { display: block; }
+    html.nv-touch-ui .dpad { display: none; }
+    html.nv-touch-ui #objective-banner { flex: 1; }
+    #nv-touch.nv-hidden { display: none !important; }
+    #nv-stick {
+      position: fixed; z-index: 12; left: calc(16px + env(safe-area-inset-left, 0px));
+      bottom: var(--nv-stick-bottom, 96px);
+      width: 116px; height: 116px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,240,255,0.10) 0%, rgba(7,3,12,0.55) 70%);
+      border: 2px solid var(--cyan); box-shadow: 0 0 12px rgba(0,240,255,0.35), inset 0 0 10px rgba(255,30,138,0.25);
+      touch-action: none; pointer-events: auto; opacity: 0.85;
+    }
+    #nv-stick.engaged { opacity: 1; border-color: var(--magenta); }
+    #nv-stick-knob {
+      position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px;
+      border-radius: 50%; background: rgba(20,8,36,0.9); border: 2px solid var(--magenta);
+      box-shadow: 0 0 10px rgba(255,30,138,0.6); pointer-events: none; will-change: transform;
+    }
+    #nv-cam-reset {
+      position: fixed; z-index: 12; right: calc(16px + env(safe-area-inset-right, 0px));
+      bottom: var(--nv-stick-bottom, 96px);
+      width: 44px; height: 44px; border-radius: 50%; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(7,3,12,0.8); border: 2px solid var(--cyan); color: var(--cyan);
+      pointer-events: auto; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    #nv-cam-reset.detached { border-color: var(--magenta); color: var(--magenta); box-shadow: 0 0 10px rgba(255,30,138,0.6); }
   </style>
 </head>
 <body>
@@ -501,6 +533,12 @@
   <div id="grade-overlay"></div>
   <div id="mist-overlay" aria-hidden="true"></div>
   <div id="crt-overlay" aria-hidden="true"></div>
+
+  <!-- Touch controls (shown on touch / coarse-pointer devices only) -->
+  <div id="nv-touch" aria-hidden="false">
+    <div id="nv-stick" role="application" aria-label="Move"><div id="nv-stick-knob"></div></div>
+    <button id="nv-cam-reset" type="button" aria-label="Reset camera" title="Reset camera"><svg class="nv-ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>
+  </div>
 
   <!-- DOM HUD & Overlays -->
   <div id="hud-layer">
@@ -3015,6 +3053,12 @@
       if (keys['ArrowDown'] || keys['KeyS']) dz = 1;
       if (keys['ArrowLeft'] || keys['KeyA']) dx = -1;
       if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
+      // Touch orbit: move relative to the camera heading (no-op at the default heading)
+      if (state.viewMode === 'GARDEN' && touchCam.yaw !== 0 && (dx || dz)) {
+        const fwd = -dz, rt = dx, sy = Math.sin(touchCam.yaw), cy = Math.cos(touchCam.yaw);
+        const vx = fwd * sy - rt * cy, vz = fwd * cy + rt * sy;
+        dx = -vx; dz = -vz;
+      }
 
       const speed = state.activeSyncForm === 'GLIDE' ? 0.22 : 0.16;
       if (state.viewMode === 'GARDEN') {
@@ -3025,8 +3069,13 @@
         playerGroup.position.z = THREE.MathUtils.clamp(nextZ, -18, 68);
 
         // 3D Third-Person Follow Camera: tight portrait framing, Neon in the lower third
-        camera.position.lerp(camGoal.set(playerGroup.position.x, 3.9, playerGroup.position.z - 7.4), 0.12);
-        camera.lookAt(playerGroup.position.x, 1.6, playerGroup.position.z + 6);
+        if (touchCam.isDefault()) {
+          touchCam.setFirstPerson(false);
+          camera.position.lerp(camGoal.set(playerGroup.position.x, 3.9, playerGroup.position.z - 7.4), 0.12);
+          camera.lookAt(playerGroup.position.x, 1.6, playerGroup.position.z + 6);
+        } else {
+          touchCam.apply();
+        }
       } else {
         // SIDE View: 2D Sega X-Men style side-scrolling lane along Z axis
         let nextZ = playerGroup.position.z + dx * speed;
@@ -3035,6 +3084,7 @@
         playerGroup.position.x = THREE.MathUtils.clamp(playerGroup.position.x - dz * (speed * 0.6), -6, 6);
 
         // Camera on the -x side so screen-right = deeper into the Garden (+z)
+        touchCam.setFirstPerson(false);
         camera.position.lerp(camGoal.set(-26, 3.6, playerGroup.position.z), 0.15);
         camera.lookAt(0, 1.7, playerGroup.position.z);
       }
@@ -3155,6 +3205,256 @@
 
     window.NVGame.gfx = () => gfxTier;
     window.NVGame.resetRun = resetRun;
+
+    /* =========================================================================
+       11. TOUCH CONTROLS (coarse pointers): move stick + gesture camera
+       - Move stick lower-left, always visible, analog, camera-relative.
+       - One-finger drag on the world: orbit the camera around Neon.
+       - Pinch: zoom; zoom all the way in for a first-person view.
+       - Two-finger swipe: detach the camera and move it freely.
+       - Reset button: camera back to its default spot behind Neon.
+       - Single tap (or long press) on an object in range: interact.
+       Desktop keyboard/mouse are untouched: these handlers only act on touch.
+       ========================================================================= */
+    const CAM_BASE_EL = Math.atan2(2.3, 7.4), CAM_BASE_LEN = Math.hypot(2.3, 7.4);
+    const touchCam = {
+      yaw: 0, el: CAM_BASE_EL, zoom: 1, detached: false, firstPerson: false,
+      pivot: new THREE.Vector3(), look: new THREE.Vector3(), _hidPlayer: false,
+      isDefault() { return this.yaw === 0 && this.el === CAM_BASE_EL && this.zoom === 1 && !this.detached; },
+      reset() {
+        this.yaw = 0; this.el = CAM_BASE_EL; this.zoom = 1; this.detached = false;
+        this.setFirstPerson(false);
+        const b = document.getElementById('nv-cam-reset'); if (b) b.classList.remove('detached');
+      },
+      setFirstPerson(on) {
+        if (on === this.firstPerson) return;
+        this.firstPerson = on;
+        if (on) { if (playerGroup.visible) { playerGroup.visible = false; this._hidPlayer = true; } }
+        else if (this._hidPlayer) { playerGroup.visible = true; this._hidPlayer = false; }
+      },
+      playerPos() { return { x: playerGroup.position.x, z: playerGroup.position.z }; },
+      forward() { return [Math.sin(this.yaw), Math.cos(this.yaw)]; },
+      right() { return [-Math.cos(this.yaw), Math.sin(this.yaw)]; },
+      detach() {
+        if (this.detached) return;
+        this.detached = true;
+        this.pivot.set(playerGroup.position.x, 1.6, playerGroup.position.z);
+        const b = document.getElementById('nv-cam-reset'); if (b) b.classList.add('detached');
+      },
+      apply() {
+        const [fx, fz] = this.forward();
+        const fp = !this.detached && this.zoom <= 0.3;
+        this.setFirstPerson(fp);
+        if (fp) {
+          const pitch = THREE.MathUtils.clamp(CAM_BASE_EL - this.el, -1.1, 1.1);
+          camGoal.set(playerGroup.position.x + fx * 0.25, 1.75, playerGroup.position.z + fz * 0.25);
+          camera.position.lerp(camGoal, 0.35);
+          this.look.set(camera.position.x + fx * Math.cos(pitch) * 10, camera.position.y + Math.sin(pitch) * 10,
+                        camera.position.z + fz * Math.cos(pitch) * 10);
+          camera.lookAt(this.look);
+          return;
+        }
+        const P = this.detached ? this.pivot : this.look.set(playerGroup.position.x, 1.6, playerGroup.position.z);
+        const len = CAM_BASE_LEN * this.zoom, ce = Math.cos(this.el), se = Math.sin(this.el);
+        camGoal.set(P.x - fx * ce * len, P.y + se * len, P.z - fz * ce * len);
+        if (camGoal.y < 0.4) camGoal.y = 0.4;
+        camera.position.lerp(camGoal, 0.18);
+        const lx = P.x + fx * 6 * Math.min(this.zoom, 1), lz = P.z + fz * 6 * Math.min(this.zoom, 1);
+        camera.lookAt(lx, P.y, lz);
+      }
+    };
+
+    (function initTouchControls() {
+      const root = document.documentElement;
+      const coarseMq = window.matchMedia ? window.matchMedia('(pointer: coarse)') : null;
+      function enableTouchUI() { root.classList.add('nv-touch-ui'); }
+      function evalTouchUI() {
+        if ((coarseMq && coarseMq.matches) || (navigator.maxTouchPoints > 0 && window.matchMedia && window.matchMedia('(hover: none)').matches)) enableTouchUI();
+      }
+      evalTouchUI();
+      if (coarseMq && coarseMq.addEventListener) coarseMq.addEventListener('change', evalTouchUI);
+      // Hybrid devices: the first real touch turns the touch UI on.
+      window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') enableTouchUI(); }, true);
+
+      // No page scroll / pinch-zoom / double-tap zoom while playing.
+      ['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+      document.addEventListener('touchmove', (e) => {
+        const t = e.target;
+        if (t && t.closest && t.closest('#gridlog-content, #build-list, #chat-messages')) return; // keep panel lists scrollable
+        e.preventDefault();
+      }, { passive: false });
+      let lastTouchEnd = 0;
+      document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd < 300 && e.target === renderer.domElement) e.preventDefault();
+        lastTouchEnd = now;
+      }, { passive: false });
+      renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+      renderer.domElement.style.touchAction = 'none';
+
+      // ---- Move stick ----
+      const stick = document.getElementById('nv-stick');
+      const knob = document.getElementById('nv-stick-knob');
+      const STICK_R = 42, DEAD = 0.12;
+      let stickId = null, sx = 0, sy = 0;
+      function stickSet(clientX, clientY) {
+        let ox = clientX - sx, oy = clientY - sy;
+        const d = Math.hypot(ox, oy);
+        if (d > STICK_R) { ox *= STICK_R / d; oy *= STICK_R / d; }
+        knob.style.transform = `translate(${ox}px, ${oy}px)`;
+        let nx = ox / STICK_R, ny = oy / STICK_R;
+        if (Math.hypot(nx, ny) < DEAD) { nx = 0; ny = 0; }
+        window.NVGame.setMove(nx, ny);
+      }
+      function stickEnd(e) {
+        if (e.pointerId !== stickId) return;
+        stickId = null;
+        stick.classList.remove('engaged');
+        knob.style.transform = '';
+        window.NVGame.setMove(0, 0);
+      }
+      stick.addEventListener('pointerdown', (e) => {
+        if (stickId !== null) return;
+        e.preventDefault(); e.stopPropagation();
+        stickId = e.pointerId;
+        try { stick.setPointerCapture(e.pointerId); } catch (_) {}
+        const r = stick.getBoundingClientRect();
+        sx = r.left + r.width / 2; sy = r.top + r.height / 2;
+        stick.classList.add('engaged');
+        stickSet(e.clientX, e.clientY);
+      });
+      stick.addEventListener('pointermove', (e) => { if (e.pointerId === stickId) { e.preventDefault(); stickSet(e.clientX, e.clientY); } });
+      stick.addEventListener('pointerup', stickEnd);
+      stick.addEventListener('pointercancel', stickEnd);
+      stick.addEventListener('lostpointercapture', stickEnd);
+
+      document.getElementById('nv-cam-reset').addEventListener('click', () => touchCam.reset());
+
+      // ---- World gestures (touch pointers on the 3D canvas only) ----
+      const el = renderer.domElement;
+      const pts = new Map();
+      let gesture = null; // { mode, t0, x0, y0, moved, pinchD, midX, midY, panAcc, longTimer }
+      const ORBIT_K = 0.0065, ZOOM_MIN = 0.15, ZOOM_MAX = 2.4;
+      const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+
+      function nodeFromHit(obj) {
+        while (obj) {
+          const n = interactables.find((it) => it.group === obj);
+          if (n) return n;
+          obj = obj.parent;
+        }
+        return null;
+      }
+      function touchObjectAt(x, y) {
+        if (state.viewMode !== 'GARDEN' && state.viewMode !== 'SIDE') return;
+        const r = el.getBoundingClientRect();
+        ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+        ray.setFromCamera(ndc, camera);
+        const groups = interactables.filter((n) => n.active && n.group && n.group.visible).map((n) => n.group);
+        const hits = ray.intersectObjects(groups, true);
+        for (const h of hits) {
+          const n = nodeFromHit(h.object);
+          if (n && n === findNearestInteractable()) { window.NVGame.interactNearest(); return; }
+        }
+      }
+      function mid() {
+        const a = [...pts.values()];
+        return { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) };
+      }
+      function startGesture() {
+        if (gesture && gesture.longTimer) clearTimeout(gesture.longTimer);
+        if (pts.size === 1) {
+          const p = [...pts.values()][0];
+          gesture = { mode: 'orbit', t0: performance.now(), x0: p.x, y0: p.y, moved: false, lx: p.x, ly: p.y };
+          gesture.longTimer = setTimeout(() => {
+            if (gesture && gesture.mode === 'orbit' && !gesture.moved) { gesture.mode = 'done'; touchObjectAt(gesture.x0, gesture.y0); }
+          }, 550);
+        } else if (pts.size >= 2) {
+          const m = mid();
+          gesture = { mode: 'two', midX: m.x, midY: m.y, pinchD: Math.max(m.d, 1), panX: 0, panY: 0 };
+        } else gesture = null;
+      }
+
+      el.addEventListener('pointerdown', (e) => {
+        if (e.pointerType !== 'touch') return; // desktop mouse/pen: unchanged
+        e.preventDefault();
+        enableTouchUI();
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        startGesture();
+      });
+      el.addEventListener('pointermove', (e) => {
+        if (e.pointerType !== 'touch' || !pts.has(e.pointerId) || !gesture) return;
+        e.preventDefault();
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (gesture.mode === 'orbit' && pts.size === 1) {
+          if (Math.hypot(e.clientX - gesture.x0, e.clientY - gesture.y0) > 8) gesture.moved = true;
+          const ddx = e.clientX - gesture.lx, ddy = e.clientY - gesture.ly;
+          gesture.lx = e.clientX; gesture.ly = e.clientY;
+          if (gesture.moved && state.viewMode === 'GARDEN') {
+            touchCam.yaw -= ddx * ORBIT_K;
+            touchCam.el = THREE.MathUtils.clamp(touchCam.el + ddy * ORBIT_K, -0.35, 1.35);
+          }
+        } else if (gesture.mode === 'two' && pts.size >= 2 && state.viewMode === 'GARDEN') {
+          const m = mid();
+          // Pinch: zoom (fully in = first person)
+          touchCam.zoom = THREE.MathUtils.clamp(touchCam.zoom * (gesture.pinchD / Math.max(m.d, 1)), ZOOM_MIN, ZOOM_MAX);
+          gesture.pinchD = Math.max(m.d, 1);
+          // Two-finger swipe: detach the camera and move it freely
+          const mdx = m.x - gesture.midX, mdy = m.y - gesture.midY;
+          gesture.midX = m.x; gesture.midY = m.y;
+          gesture.panX += mdx; gesture.panY += mdy; // net swipe (pinch jitter cancels out)
+          if (touchCam.detached || Math.hypot(gesture.panX, gesture.panY) > 18) {
+            touchCam.detach();
+            touchCam.setFirstPerson(false);
+            if (touchCam.zoom < 0.35) touchCam.zoom = 0.35;
+            const s = 0.012 * Math.max(touchCam.zoom, 0.5) * CAM_BASE_LEN / 7;
+            const [rx, rz] = touchCam.right(), [fx, fz] = touchCam.forward();
+            touchCam.pivot.x += -rx * mdx * s + fx * -mdy * s;
+            touchCam.pivot.z += -rz * mdx * s + fz * -mdy * s;
+            touchCam.pivot.x = THREE.MathUtils.clamp(touchCam.pivot.x, -40, 40);
+            touchCam.pivot.z = THREE.MathUtils.clamp(touchCam.pivot.z, -40, 110);
+          }
+        }
+      });
+      function endPointer(e) {
+        if (e.pointerType !== 'touch' || !pts.has(e.pointerId)) return;
+        pts.delete(e.pointerId);
+        if (gesture && gesture.mode === 'orbit' && e.type === 'pointerup' && !gesture.moved && performance.now() - gesture.t0 < 350) {
+          touchObjectAt(gesture.x0, gesture.y0);
+        }
+        if (gesture && gesture.longTimer) clearTimeout(gesture.longTimer);
+        if (pts.size === 0) gesture = null;
+        else { startGesture(); if (gesture) gesture.moved = true; } // lifting one finger of two: carry on orbiting, no tap
+      }
+      el.addEventListener('pointerup', endPointer);
+      el.addEventListener('pointercancel', endPointer);
+
+      // Keep the stick and reset button above the bottom bar / dialogue, hidden behind modals.
+      const touchRoot = document.getElementById('nv-touch');
+      const bar = document.querySelector('.bottom-bar');
+      const dlg = document.getElementById('dialogue-box');
+      let layoutTick = 0;
+      function layoutTouch() {
+        if (++layoutTick % 10 === 0 && root.classList.contains('nv-touch-ui')) {
+          const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
+          let bottom = window.innerHeight - barTop + 14;
+          if (dlg && getComputedStyle(dlg).display !== 'none') {
+            const dr = dlg.getBoundingClientRect();
+            if (dr.height) bottom = Math.max(bottom, window.innerHeight - dr.top + 10);
+          }
+          root.style.setProperty('--nv-stick-bottom', Math.round(bottom) + 'px');
+          const modalOpen = !!document.querySelector('.modal-card.visible');
+          touchRoot.classList.toggle('nv-hidden', modalOpen);
+          if (modalOpen && stickId !== null) { stickId = null; knob.style.transform = ''; window.NVGame.setMove(0, 0); }
+        }
+        requestAnimationFrame(layoutTouch);
+      }
+      requestAnimationFrame(layoutTouch);
+
+      window.NVGame.touchCam = touchCam;
+    })();
+
     applyViewMode();
     animate();
   </script>
