@@ -107,21 +107,26 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   }));
 }
 
-// Gigas Garden is gated: no session sends the visitor to sign-in, then back to the game. Signed-in visitors get the
-// game page with the hub/chat icons from auth-gate.js. The game file carries the gate tag; here its mode is set to server.
-const GAME_HTML = path.join(process.cwd(), 'web', 'public', 'gigas-garden', 'index.html');
-app.use('/gigas-garden', (req, res, next) => {
-  if (req.path !== '/' && req.path !== '/index.html') return next();
-  if (req.originalUrl === '/gigas-garden') return res.redirect('/gigas-garden/');
-  if (!req.isAuthenticated()) {
-    return res.redirect(`${FRONTEND_URL}/?next=${encodeURIComponent('/gigas-garden/')}`);
-  }
-  const tag = '<script src="../auth-gate.js" data-mode="server"></script>';
-  const gate = /<script\b[^>]*\bsrc="[^"]*auth-gate\.js"[^>]*><\/script>/i; // the game file carries its own tag
-  const raw = fs.readFileSync(GAME_HTML, 'utf8');
-  const html = gate.test(raw) ? raw.replace(gate, tag) : raw.replace(/<head>/i, (m) => `${m}\n  ${tag}`);
-  res.set('Cache-Control', 'no-store').type('html').send(html);
-});
+// Gigas Garden and its My Room page (infiniti6-rooms) are gated: no session sends the visitor to sign-in, then back to
+// the page. Signed-in visitors get the page with the hub/chat icons from auth-gate.js. Each page file carries the gate
+// tag; here its mode is set to server.
+const GATE_TAG = '<script src="../auth-gate.js" data-mode="server"></script>';
+const GATE_RE = /<script\b[^>]*\bsrc="[^"]*auth-gate\.js"[^>]*><\/script>/i; // the page file carries its own tag
+for (const dir of ['gigas-garden', 'infiniti6-rooms']) {
+  const file = path.join(process.cwd(), 'web', 'public', dir, 'index.html');
+  app.use(`/${dir}`, (req, res, next) => {
+    if (req.path !== '/' && req.path !== '/index.html') return next();
+    const [pathname, query = ''] = req.originalUrl.split('?');
+    const qs = query ? `?${query}` : '';
+    if (pathname === `/${dir}`) return res.redirect(`/${dir}/${qs}`);
+    if (!req.isAuthenticated()) {
+      return res.redirect(`${FRONTEND_URL}/?next=${encodeURIComponent(`/${dir}/${qs}`)}`);
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    const html = GATE_RE.test(raw) ? raw.replace(GATE_RE, GATE_TAG) : raw.replace(/<head>/i, (m) => `${m}\n  ${GATE_TAG}`);
+    res.set('Cache-Control', 'no-store').type('html').send(html);
+  });
+}
 
 app.use(express.static(path.join(process.cwd(), 'web', 'public')));
 

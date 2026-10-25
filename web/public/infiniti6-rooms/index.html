@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Neon Vigil sign-in gate. Keep this tag when copying this file to gh-pages; the build and backend set data-mode. -->
+  <script src="../auth-gate.js" data-mode="google"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <meta name="theme-color" content="#050208" />
@@ -73,6 +75,9 @@
     }
 
     .top-bar, .bottom-bar { pointer-events: auto; }
+
+    /* My Room: way back to the game's Bridge (same origin, so the sign-in session carries over) */
+    .hud-btn.back-btn { min-height: 44px; display: inline-flex; align-items: center; text-decoration: none; }
 
     .top-bar {
       background: var(--panel-black);
@@ -187,6 +192,45 @@
       opacity: 0.78;
     }
 
+    .radio-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    a.hud-btn { text-decoration: none; }
+    .vol {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--cyan);
+    }
+    .vol input {
+      width: 92px;
+      accent-color: var(--cyan);
+      touch-action: manipulation;
+    }
+    .vol select {
+      background: #120722;
+      color: var(--cyan);
+      border: 1px solid var(--cyan);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 0.3px;
+      min-height: 40px;
+      padding: 6px 8px;
+      text-transform: none;
+    }
+    #radio-note { flex: 1 0 200px; margin: 0; }
+
+    #hud.mode-live .palette,
+    #hud.mode-live .actions { display: none; }
+
     .boot {
       position: fixed;
       z-index: 6;
@@ -222,6 +266,7 @@
 
   <div id="hud">
     <header class="top-bar">
+      <a class="hud-btn back-btn" id="back-bridge" href="../gigas-garden/" title="Back to the Bridge">BACK TO BRIDGE</a>
       <div class="brand">
         <h1>Room v2</h1>
         <p class="sub">Infiniti 6</p>
@@ -230,6 +275,10 @@
         <button type="button" class="hud-btn" role="tab" data-room="quarters-a">Quarters A</button>
         <button type="button" class="hud-btn" role="tab" data-room="quarters-b">Quarters B</button>
         <button type="button" class="hud-btn" role="tab" data-room="mess">Mess</button>
+      </div>
+      <div class="tabs" role="group" aria-label="Mode">
+        <button type="button" class="hud-btn" id="mode-live" aria-pressed="true">Live</button>
+        <button type="button" class="hud-btn" id="mode-edit" aria-pressed="false">Edit</button>
       </div>
       <div class="status-row">
         <p id="status" aria-live="polite">Loading room…</p>
@@ -268,11 +317,25 @@
           <span>Shelf</span>
         </button>
       </div>
+      <div class="radio-row" role="group" aria-label="Radio">
+        <label class="vol">Station
+          <select id="radio-station" aria-label="Radio station"></select>
+        </label>
+        <button type="button" class="hud-btn" id="btn-radio" aria-pressed="false">Play</button>
+        <a class="hud-btn" id="radio-site" href="https://jeromefm.live/" target="_blank" rel="noopener noreferrer">Station site</a>
+        <label class="vol">Vol
+          <input id="radio-vol" type="range" min="0" max="1" step="0.05" value="0.7" aria-label="Radio volume">
+        </label>
+        <p id="radio-note" class="hint"></p>
+      </div>
       <div class="actions" role="toolbar" aria-label="Edit">
         <button type="button" class="hud-btn" id="btn-rotate" title="Rotate 90 degrees (R)">Rotate</button>
         <button type="button" class="hud-btn" id="btn-remove" title="Remove (Delete)">Remove</button>
         <button type="button" class="hud-btn" id="btn-reset" title="Restore the starter layout for this room">Reset</button>
         <button type="button" class="hud-btn" id="btn-save" title="Store the layout in this browser">Save</button>
+        <button type="button" class="hud-btn" id="btn-grid" aria-pressed="true" title="Show or hide the floor grid">Grid</button>
+        <button type="button" class="hud-btn" id="btn-walls" aria-pressed="false" title="Full walls, hide the near wall, or hide every wall">Walls</button>
+        <button type="button" class="hud-btn" id="btn-top" aria-pressed="false" title="Lock a top-down view">Top</button>
       </div>
       <p id="hint" class="hint"></p>
     </footer>
@@ -300,9 +363,186 @@
     const btnSave = document.getElementById('btn-save');
 
     const coarse = window.matchMedia('(pointer: coarse)').matches;
-    hintEl.textContent = coarse
-      ? 'Tap a tile to place. Drag a piece to move it. Two fingers orbit and pinch. Double-tap a piece to turn it.'
-      : 'Click a tile to place. Drag a piece to move it. Drag the open floor or right-drag to orbit, scroll to zoom. R rotates, Delete removes.';
+    const hudEl = document.getElementById('hud');
+    const modeLiveBtn = document.getElementById('mode-live');
+    const modeEditBtn = document.getElementById('mode-edit');
+    let pendingMode = readStoredMode();
+    let applySceneMode = null;
+
+    function readStoredMode() {
+      try {
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (data && data.mode === 'edit') return 'edit';
+      } catch (err) { /* live until a layout is stored */ }
+      return 'live';
+    }
+
+    function paintHint(mode) {
+      const edit = mode === 'edit';
+      if (edit) {
+        hintEl.textContent = coarse
+          ? 'Edit. Tap a tile to place. Drag a piece to move it. Walls and Top are on the bar. Two fingers orbit and pinch.'
+          : 'Edit. Click to place, drag to move. WASD pans, Q and E raise the camera. Grid, Walls, and Top are on the bar.';
+        return;
+      }
+      hintEl.textContent = coarse
+        ? 'Live. Drag to look around. Pinch out to edit the decor.'
+        : 'Live. Drag to look around, scroll to zoom. Zoom out to edit the decor.';
+    }
+
+    function showMode(mode) {
+      const edit = mode === 'edit';
+      hudEl.classList.toggle('mode-edit', edit);
+      hudEl.classList.toggle('mode-live', !edit);
+      modeLiveBtn.setAttribute('aria-pressed', edit ? 'false' : 'true');
+      modeEditBtn.setAttribute('aria-pressed', edit ? 'true' : 'false');
+      paintHint(mode);
+    }
+
+    function chooseMode(mode) {
+      pendingMode = mode === 'edit' ? 'edit' : 'live';
+      showMode(pendingMode);
+      if (applySceneMode) applySceneMode(pendingMode);
+    }
+
+    showMode(pendingMode);
+    modeLiveBtn.addEventListener('click', () => chooseMode('live'));
+    modeEditBtn.addEventListener('click', () => chooseMode('edit'));
+
+    bootRadio();
+
+    function bootRadio() {
+      const RADIO_KEY = 'nv.infiniti6.radio.v1';
+      const STATIONS = [
+        { id: 'jerome', name: 'Jerome FM', url: 'https://radio.jeromefm.live/stream', site: 'https://jeromefm.live/' },
+        { id: 'ssr1', name: 'SSR Ambient', url: 'https://systrum.net:8443/SSR1', site: 'https://systrum.net/' },
+        { id: 'ssr2', name: 'SSR Electronic', url: 'https://systrum.net:8443/SSR2', site: 'https://systrum.net/' },
+        { id: 'nightride', name: 'Nightride', url: 'https://stream.nightride.fm/nightride.mp3', site: 'https://nightride.fm/' },
+        { id: 'chillsynth', name: 'Chillsynth', url: 'https://stream.nightride.fm/chillsynth.mp3', site: 'https://nightride.fm/' },
+        { id: 'yumi', name: 'Yumi Co', url: 'https://yumicoradio.net/stream', site: 'https://yumicoradio.net/' },
+        { id: 'sutro', name: 'Sutro FM', url: 'https://media.evenings.co/s/7Lo66BLQe', site: 'https://sutrofm.net/' },
+      ];
+      const btn = document.getElementById('btn-radio');
+      const note = document.getElementById('radio-note');
+      const vol = document.getElementById('radio-vol');
+      const picker = document.getElementById('radio-station');
+      const site = document.getElementById('radio-site');
+      const audio = new Audio();
+      audio.preload = 'none';
+      let on = false;
+      let token = 0;
+
+      STATIONS.forEach((station) => {
+        const option = document.createElement('option');
+        option.value = station.id;
+        option.textContent = station.name;
+        picker.appendChild(option);
+      });
+
+      function readPrefs() {
+        try {
+          const data = JSON.parse(localStorage.getItem(RADIO_KEY) || '{}');
+          return data && typeof data === 'object' ? data : {};
+        } catch (err) {
+          return {};
+        }
+      }
+
+      function current() {
+        return STATIONS.find((station) => station.id === picker.value) || STATIONS[0];
+      }
+
+      function remember() {
+        try {
+          localStorage.setItem(RADIO_KEY, JSON.stringify({
+            volume: Number(vol.value),
+            station: picker.value,
+          }));
+        } catch (err) { /* storage off */ }
+      }
+
+      function say(text) { note.textContent = text; }
+
+      function paint() {
+        const station = current();
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.textContent = on ? 'Stop' : 'Play';
+        site.href = station.site;
+        site.title = 'Open ' + station.name;
+      }
+
+      function stop() {
+        on = false;
+        token += 1;
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+        paint();
+      }
+
+      function tune() {
+        const station = current();
+        const mine = ++token;
+        on = true;
+        paint();
+        say('Tuning ' + station.name + '…');
+        audio.src = station.url;
+        audio.volume = Number(vol.value);
+        audio.play().then(() => {
+          if (mine !== token || !on) return;
+          say(station.name + ' is on.');
+        }).catch((err) => {
+          if (mine !== token) return;
+          stop();
+          say(err && err.name === 'NotAllowedError'
+            ? 'Press Play again to start the audio.'
+            : station.name + ' is off air.');
+        });
+      }
+
+      audio.addEventListener('error', () => {
+        const mine = token;
+        const station = current();
+        if (!on || !audio.error) return;
+        const failed = audio.currentSrc || audio.src || '';
+        if (failed && !failed.includes(new URL(station.url).pathname)) return;
+        window.setTimeout(() => {
+          if (mine !== token || !on || !audio.error) return;
+          const name = station.name;
+          stop();
+          say(name + ' is off air.');
+        }, 200);
+      });
+
+      const prefs = readPrefs();
+      const savedVolume = Number(prefs.volume);
+      vol.value = String(Number.isFinite(savedVolume) ? Math.min(1, Math.max(0, savedVolume)) : 0.7);
+      audio.volume = Number(vol.value);
+      if (STATIONS.some((station) => station.id === prefs.station)) picker.value = prefs.station;
+      paint();
+
+      vol.addEventListener('input', () => {
+        audio.volume = Number(vol.value);
+        remember();
+      });
+      picker.addEventListener('change', () => {
+        remember();
+        paint();
+        if (on) tune();
+        else say(current().name + ' is ready.');
+      });
+      btn.addEventListener('click', () => {
+        if (on) {
+          const name = current().name;
+          stop();
+          say(name + ' stopped.');
+          return;
+        }
+        tune();
+      });
+
+      say(current().name + ' is ready. Press Play.');
+    }
 
     try {
       const THREE = await import('three');
@@ -316,6 +556,8 @@
 
     function start(THREE, OrbitControls) {
       const motionOK = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const WIN_Y = 1.16;
+      const WIN_H = 1.42;
       const ROOMS = {
         'quarters-a': { id: 'quarters-a', label: 'Quarters A', w: 8, d: 6 },
         'quarters-b': { id: 'quarters-b', label: 'Quarters B', w: 7, d: 7 },
@@ -462,6 +704,7 @@
       function freshState() {
         return {
           active: 'quarters-a',
+          mode: 'live',
           rooms: Object.fromEntries(Object.keys(ROOMS).map((id) => [id, cloneStarter(id)])),
         };
       }
@@ -478,7 +721,8 @@
             rooms[id] = list ? sanitize(ROOMS[id], list) : cloneStarter(id);
           });
           const active = ROOMS[data.active] ? data.active : 'quarters-a';
-          return { active, rooms };
+          const mode = data.mode === 'edit' ? 'edit' : 'live';
+          return { active, rooms, mode };
         } catch (err) {
           return freshState();
         }
@@ -489,6 +733,7 @@
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
             v: 1,
             active: state.active,
+            mode: state.mode,
             rooms: state.rooms,
           }));
           savePill.textContent = 'stored';
@@ -503,6 +748,22 @@
 
       assertStarters();
       let state = loadState();
+      state.mode = pendingMode;
+      applySceneMode = setMode;
+      let gridLines = null;
+      let showGrid = true;
+      let wallView = 'full';
+      let topLock = false;
+      let booted = false;
+      let lastPanAt = 0;
+      const held = new Set();
+      const panForward = new THREE.Vector3();
+      const panRight = new THREE.Vector3();
+      const panMove = new THREE.Vector3();
+
+      function editing() {
+        return state.mode === 'edit';
+      }
       let placeType = null;
       let placeRot = 0;
       let selectedId = null;
@@ -551,6 +812,12 @@
       controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
       controls.touches.ONE = -1;
       controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
+      syncModeChrome();
+      controls.addEventListener('change', () => {
+        if (!booted || editing()) return;
+        const dist = camera.position.distanceTo(controls.target);
+        if (dist >= controls.maxDistance - 0.25) setMode('edit', 'zoom');
+      });
 
       const hemi = new THREE.HemisphereLight(0xff6fb5, 0x06141a, 0.85);
       const ambient = new THREE.AmbientLight(0x2a1244, 0.62);
@@ -601,7 +868,7 @@
       function renderStatus() {
         const items = currentItems();
         const n = items.length;
-        let text = room().label + ' · ' + room().w + '×' + room().d + ' · ' + n + (n === 1 ? ' piece' : ' pieces');
+        let text = (editing() ? 'Edit' : 'Live') + ' · ' + room().label + ' · ' + room().w + '×' + room().d + ' · ' + n + (n === 1 ? ' piece' : ' pieces');
         if (placeType) text += ' · placing ' + CATALOG[placeType].label + ' ' + (placeRot * 90) + '°';
         else if (selectedId && getItem(selectedId)) {
           text += ' · ' + CATALOG[getItem(selectedId).type].label + ' selected';
@@ -630,10 +897,125 @@
 
       function paintCursor() {
         const el = renderer.domElement;
-        if (gesture && gesture.dragging) el.style.cursor = 'grabbing';
+        if (!editing()) el.style.cursor = 'grab';
+        else if (gesture && gesture.dragging) el.style.cursor = 'grabbing';
         else if (placeType) el.style.cursor = 'crosshair';
         else if (hoverItem) el.style.cursor = 'pointer';
         else el.style.cursor = 'default';
+      }
+
+      function syncModeChrome() {
+        controls.mouseButtons.LEFT = editing() ? -1 : THREE.MOUSE.ROTATE;
+        controls.touches.ONE = editing() ? -1 : THREE.TOUCH.ROTATE;
+        controls.enabled = true;
+        showMode(state.mode);
+        paintBuildButtons();
+      }
+
+      function paintBuildButtons() {
+        const gridBtn = document.getElementById('btn-grid');
+        const wallBtn = document.getElementById('btn-walls');
+        const topBtn = document.getElementById('btn-top');
+        gridBtn.setAttribute('aria-pressed', showGrid ? 'true' : 'false');
+        topBtn.setAttribute('aria-pressed', topLock ? 'true' : 'false');
+        wallBtn.textContent = wallView === 'follow' ? 'Follow' : wallView === 'hide' ? 'Hide walls' : 'Walls';
+        wallBtn.setAttribute('aria-pressed', wallView === 'full' ? 'false' : 'true');
+      }
+
+      function applyGrid() {
+        if (gridLines) gridLines.visible = !editing() || showGrid;
+      }
+
+      function nearWall() {
+        const rm = room();
+        const dx = camera.position.x - rm.w / 2;
+        const dz = camera.position.z - rm.d / 2;
+        if (Math.abs(dx) > Math.abs(dz)) return dx > 0 ? 'e' : 'w';
+        return dz > 0 ? 'n' : 's';
+      }
+
+      function applyWalls() {
+        if (!roomRoot) return;
+        const blocked = editing() && wallView === 'follow' ? nearWall() : '';
+        roomRoot.traverse((obj) => {
+          const side = obj.userData && obj.userData.wall;
+          if (!side) return;
+          if (!editing() || wallView === 'full') obj.visible = true;
+          else if (wallView === 'hide') obj.visible = false;
+          else obj.visible = side !== blocked;
+        });
+      }
+
+      function applyTopLock() {
+        if (editing() && topLock) {
+          controls.minPolarAngle = 0.12;
+          controls.maxPolarAngle = 0.22;
+          const offset = camera.position.clone().sub(controls.target);
+          const dist = Math.max(offset.length(), controls.minDistance);
+          camera.position.set(controls.target.x, controls.target.y + dist, controls.target.z + dist * 0.08);
+          return;
+        }
+        controls.minPolarAngle = 0.18;
+        controls.maxPolarAngle = Math.PI / 2 - 0.06;
+      }
+
+      function panBuildCamera() {
+        if (!editing()) return;
+        let x = 0;
+        let z = 0;
+        let y = 0;
+        if (held.has('w')) z -= 1;
+        if (held.has('s')) z += 1;
+        if (held.has('a')) x -= 1;
+        if (held.has('d')) x += 1;
+        if (held.has('q')) y += 1;
+        if (held.has('e')) y -= 1;
+        const now = clock.getElapsedTime();
+        const dt = Math.min(0.05, lastPanAt ? now - lastPanAt : 0.016);
+        lastPanAt = now;
+        if (!x && !z && !y) return;
+        const speed = 7 * dt;
+        camera.getWorldDirection(panForward);
+        panForward.y = 0;
+        if (panForward.lengthSq() < 1e-6) panForward.set(0, 0, -1);
+        panForward.normalize();
+        panRight.setFromMatrixColumn(camera.matrixWorld, 0);
+        panRight.y = 0;
+        if (panRight.lengthSq() > 1e-6) panRight.normalize();
+        panMove.set(0, 0, 0);
+        panMove.addScaledVector(panForward, -z * speed);
+        panMove.addScaledVector(panRight, x * speed);
+        panMove.y += y * speed;
+        camera.position.add(panMove);
+        controls.target.add(panMove);
+      }
+
+      function setMode(mode, reason) {
+        const next = mode === 'edit' ? 'edit' : 'live';
+        if (next === state.mode) return;
+        if (next !== 'edit') {
+          placeType = null;
+          selectedId = null;
+          hoverTile = null;
+          hoverItem = null;
+          flash = '';
+          swapGhost(null);
+          cancelDrag();
+        }
+        state.mode = next;
+        pendingMode = next;
+        held.clear();
+        if (next !== 'edit') frameCamera();
+        syncModeChrome();
+        applyGrid();
+        applyWalls();
+        applyTopLock();
+        updateMarker();
+        updateButtons();
+        renderStatus();
+        paintCursor();
+        persist();
+        if (reason === 'zoom') setStatus('Edit');
       }
 
       function showMarker(it, color, opacity) {
@@ -667,6 +1049,13 @@
       }
 
       function updateMarker() {
+        if (!editing()) {
+          marker.visible = false;
+          selBox.visible = false;
+          if (ghost) ghost.visible = false;
+          paintCursor();
+          return;
+        }
         const dragging = gesture && gesture.dragging ? getItem(gesture.itemId) : null;
         if (placeType && hoverTile && !dragging) {
           const temp = { id: '__ghost', type: placeType, x: hoverTile.x, z: hoverTile.z, rot: placeRot };
@@ -858,6 +1247,7 @@
       }
 
       function doRotate() {
+        if (!editing()) return;
         if (placeType) {
           placeRot = (placeRot + 1) % 4;
           updateMarker();
@@ -885,6 +1275,7 @@
       }
 
       function doRemove() {
+        if (!editing()) return;
         const it = getItem(selectedId);
         if (!it || placeType) {
           setStatus('Select a piece to remove');
@@ -994,6 +1385,7 @@
       }
 
       function onPointerDown(e) {
+        if (!editing()) return;
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         pointers.add(e.pointerId);
         if (pointers.size > 1) {
@@ -1019,6 +1411,7 @@
       }
 
       function onPointerMove(e) {
+        if (!editing()) return;
         if (gesture && e.pointerId === gesture.id && !multi) {
           const dist = Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y);
           if (dist > 8) gesture.moved = true;
@@ -1048,6 +1441,7 @@
       }
 
       function onPointerUp(e) {
+        if (!editing()) return;
         pointers.delete(e.pointerId);
         const g = gesture;
         const cancel = e.type === 'pointercancel';
@@ -1070,6 +1464,7 @@
       }
 
       function setTool(type) {
+        if (!editing() && type) return;
         placeType = type;
         placeRot = 0;
         if (type) selectedId = null;
@@ -1093,6 +1488,7 @@
       }
 
       function onReset() {
+        if (!editing()) return;
         const now = performance.now();
         if (now > resetUntil) {
           resetUntil = now + 2400;
@@ -1129,11 +1525,53 @@
         const ok = persist();
         setStatus(ok ? 'Layout stored in this browser' : 'Could not store the layout');
       });
+      document.getElementById('btn-grid').addEventListener('click', () => {
+        if (!editing()) return;
+        showGrid = !showGrid;
+        applyGrid();
+        paintBuildButtons();
+      });
+      document.getElementById('btn-walls').addEventListener('click', () => {
+        if (!editing()) return;
+        wallView = wallView === 'full' ? 'follow' : wallView === 'follow' ? 'hide' : 'full';
+        applyWalls();
+        paintBuildButtons();
+        setStatus(wallView === 'full' ? 'Walls shown' : wallView === 'follow' ? 'Near wall hidden' : 'Walls hidden');
+      });
+      document.getElementById('btn-top').addEventListener('click', () => {
+        if (!editing()) return;
+        topLock = !topLock;
+        applyTopLock();
+        controls.update();
+        paintBuildButtons();
+      });
+
+      window.addEventListener('keyup', (e) => {
+        const key = e.key.toLowerCase();
+        const panKey = key === 'arrowup' ? 'w'
+          : key === 'arrowdown' ? 's'
+            : key === 'arrowleft' ? 'a'
+              : key === 'arrowright' ? 'd'
+                : key;
+        held.delete(panKey);
+      });
+      window.addEventListener('blur', () => held.clear());
 
       window.addEventListener('keydown', (e) => {
         const tag = e.target && e.target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (!editing()) return;
         const key = e.key.toLowerCase();
+        const panKey = key === 'arrowup' ? 'w'
+          : key === 'arrowdown' ? 's'
+            : key === 'arrowleft' ? 'a'
+              : key === 'arrowright' ? 'd'
+                : key;
+        if (panKey === 'w' || panKey === 'a' || panKey === 's' || panKey === 'd' || panKey === 'q' || panKey === 'e') {
+          held.add(panKey);
+          e.preventDefault();
+          return;
+        }
         if (key === 'escape') {
           setTool(null);
           clearSelection();
@@ -1175,14 +1613,23 @@
       resize();
 
       function animate() {
+        const t = clock.getElapsedTime();
         if (motionOK) {
-          const s = 0.5 + 0.5 * Math.sin(clock.getElapsedTime() * 2.1);
+          const s = 0.5 + 0.5 * Math.sin(t * 2.1);
           mats.neonCyan.emissiveIntensity = 1.15 + s * 0.5;
           mats.neonMagenta.emissiveIntensity = 1.05 + (1 - s) * 0.45;
           mats.bulb.emissiveIntensity = 1.45 + s * 0.9;
           mats.glowCyan.opacity = 0.42 + s * 0.38;
           mats.glowMagenta.opacity = 0.32 + (1 - s) * 0.28;
+          if (roomRoot) {
+            roomRoot.traverse((obj) => {
+              if (obj.userData.sway == null) return;
+              obj.rotation.z = Math.sin(t * 0.85 + obj.userData.sway) * 0.07;
+            });
+          }
         }
+        panBuildCamera();
+        if (editing() && wallView === 'follow') applyWalls();
         controls.update();
         renderer.render(scene, camera);
       }
@@ -1193,6 +1640,7 @@
       renderer.setAnimationLoop(animate);
       renderer.render(scene, camera);
       boot.hidden = true;
+      booted = true;
       window.__roomsReady = true;
 
       function box(parent, mat, sx, sy, sz, x, y, z, opts = {}) {
@@ -1200,6 +1648,7 @@
         mesh.position.set(x, y, z);
         mesh.castShadow = opts.cast !== false;
         mesh.receiveShadow = opts.receive !== false;
+        if (opts.wall) mesh.userData.wall = opts.wall;
         parent.add(mesh);
         return mesh;
       }
@@ -1349,7 +1798,28 @@
         return g;
       }
 
-      function addPanels(along, fixed, length) {
+      function northHoles(w) {
+        if (w >= 9) {
+          const ww = 2.2;
+          return [w * 0.27, w * 0.73].map((cx) => ({
+            x0: cx - ww / 2,
+            x1: cx + ww / 2,
+            cx,
+            ww,
+          }));
+        }
+        const ww = Math.min(3.25, w * 0.54);
+        const cx = w / 2;
+        return [{ x0: cx - ww / 2, x1: cx + ww / 2, cx, ww }];
+      }
+
+      function sideHole(d) {
+        const wz = Math.min(1.9, d * 0.48);
+        const cz = d * 0.64;
+        return { z0: cz - wz / 2, z1: cz + wz / 2, cz, wz };
+      }
+
+      function addPanels(along, fixed, length, hole, side) {
         const n = Math.max(2, Math.round(length / 1.8));
         const gap = 0.12;
         const span = length - gap * (n + 1);
@@ -1357,61 +1827,245 @@
         for (let i = 0; i < n; i += 1) {
           const offset = gap + pw / 2 + i * (pw + gap);
           if (along === 'z') {
-            box(roomRoot, mats.panel, 0.035, 1.55, pw * 0.9, fixed, 1.28, offset, { cast: false });
+            const half = pw * 0.45;
+            if (hole && offset + half > hole.z0 && offset - half < hole.z1) continue;
+            box(roomRoot, mats.panel, 0.035, 1.55, pw * 0.9, fixed, 1.28, offset, { cast: false, wall: side });
           } else {
-            box(roomRoot, mats.panel, pw * 0.9, 1.55, 0.035, offset, 1.28, fixed, { cast: false });
+            box(roomRoot, mats.panel, pw * 0.9, 1.55, 0.035, offset, 1.28, fixed, { cast: false, wall: side });
           }
         }
       }
 
-      function addNorthWall(w, d) {
+      function addWindow(axis, x, y, z, width, height, side) {
+        const f = 0.05;
+        const y0 = y - height / 2;
+        const y1 = y + height / 2;
+        const frame = { cast: false, receive: false, wall: side };
+        if (axis === 'z') {
+          box(roomRoot, mats.neonCyan, width + f, f, f, x, y1, z, frame);
+          box(roomRoot, mats.neonCyan, width + f, f, f, x, y0, z, frame);
+          box(roomRoot, mats.neonCyan, f, height, f, x - width / 2, y, z, frame);
+          box(roomRoot, mats.neonCyan, f, height, f, x + width / 2, y, z, frame);
+          const pane = new THREE.Mesh(new THREE.PlaneGeometry(width - 0.08, height - 0.08), mats.glass);
+          pane.position.set(x, y, z);
+          pane.castShadow = false;
+          pane.receiveShadow = false;
+          pane.userData.wall = side;
+          roomRoot.add(pane);
+          return;
+        }
+        box(roomRoot, mats.neonCyan, f, f, width + f, x, y1, z, frame);
+        box(roomRoot, mats.neonCyan, f, f, width + f, x, y0, z, frame);
+        box(roomRoot, mats.neonCyan, f, height, f, x, y, z - width / 2, frame);
+        box(roomRoot, mats.neonCyan, f, height, f, x, y, z + width / 2, frame);
+        const pane = new THREE.Mesh(new THREE.PlaneGeometry(width - 0.08, height - 0.08), mats.glass);
+        pane.rotation.y = Math.PI / 2;
+        pane.position.set(x, y, z);
+        pane.castShadow = false;
+        pane.receiveShadow = false;
+        pane.userData.wall = side;
+        roomRoot.add(pane);
+      }
+
+      function addWallAlongX(x0, x1, zCenter, holes, side) {
         const H = 2.4;
         const t = 0.16;
-        const z = d + t / 2;
-        const ww = Math.min(2.6, w * 0.42);
-        const wh = 1.15;
-        const cx = w / 2;
-        const cy = 1.32;
-        const x0 = -0.02;
-        const x1 = w + 0.02;
+        const y0 = WIN_Y - WIN_H / 2;
+        const y1 = WIN_Y + WIN_H / 2;
         const fullW = x1 - x0;
-        const y0 = cy - wh / 2;
-        const y1 = cy + wh / 2;
-        const wx0 = cx - ww / 2;
-        const wx1 = cx + ww / 2;
-        box(roomRoot, mats.wall, fullW, y0, t, x0 + fullW / 2, y0 / 2, z);
+        const opt = { wall: side };
+        box(roomRoot, mats.wall, fullW, y0, t, x0 + fullW / 2, y0 / 2, zCenter, opt);
         const topH = H - y1;
-        box(roomRoot, mats.wall, fullW, topH, t, x0 + fullW / 2, y1 + topH / 2, z);
-        const leftW = wx0 - x0;
-        box(roomRoot, mats.wall, leftW, wh, t, x0 + leftW / 2, cy, z);
-        const rightW = x1 - wx1;
-        box(roomRoot, mats.wall, rightW, wh, t, wx1 + rightW / 2, cy, z);
-        const pane = new THREE.Mesh(new THREE.PlaneGeometry(ww - 0.04, wh - 0.04), mats.glass);
-        pane.position.set(cx, cy, d - 0.01);
-        roomRoot.add(pane);
-        const f = 0.045;
-        box(roomRoot, mats.neonCyan, ww + f, f, f, cx, y1, d - 0.02, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, ww + f, f, f, cx, y0, d - 0.02, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, f, wh, f, wx0, cy, d - 0.02, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, f, wh, f, wx1, cy, d - 0.02, { cast: false, receive: false });
-        const rng = mulberry32(0x1f6);
-        for (let i = 0; i < 14; i += 1) {
-          const dot = new THREE.Mesh(
-            new THREE.SphereGeometry(0.02 + rng() * 0.018, 4, 3),
-            rng() > 0.72 ? mats.neonMagenta : mats.neonCyan
-          );
-          dot.position.set(
-            cx + (rng() - 0.5) * ww * 0.82,
-            cy + (rng() - 0.5) * wh * 0.72,
-            d + 0.5 + rng() * 2.2
-          );
-          dot.castShadow = false;
-          roomRoot.add(dot);
+        box(roomRoot, mats.wall, fullW, topH, t, x0 + fullW / 2, y1 + topH / 2, zCenter, opt);
+        const ordered = holes.slice().sort((a, b) => a.x0 - b.x0);
+        let cursor = x0;
+        ordered.forEach((hole) => {
+          const span = hole.x0 - cursor;
+          if (span > 0.02) box(roomRoot, mats.wall, span, WIN_H, t, cursor + span / 2, WIN_Y, zCenter, opt);
+          cursor = hole.x1;
+        });
+        const end = x1 - cursor;
+        if (end > 0.02) box(roomRoot, mats.wall, end, WIN_H, t, cursor + end / 2, WIN_Y, zCenter, opt);
+      }
+
+      function addWallAlongZ(z0, z1, xCenter, holes, side) {
+        const H = 2.4;
+        const t = 0.16;
+        const y0 = WIN_Y - WIN_H / 2;
+        const y1 = WIN_Y + WIN_H / 2;
+        const fullD = z1 - z0;
+        const opt = { wall: side };
+        box(roomRoot, mats.wall, t, y0, fullD, xCenter, y0 / 2, z0 + fullD / 2, opt);
+        const topH = H - y1;
+        box(roomRoot, mats.wall, t, topH, fullD, xCenter, y1 + topH / 2, z0 + fullD / 2, opt);
+        const ordered = holes.slice().sort((a, b) => a.z0 - b.z0);
+        let cursor = z0;
+        ordered.forEach((hole) => {
+          const span = hole.z0 - cursor;
+          if (span > 0.02) box(roomRoot, mats.wall, t, WIN_H, span, xCenter, WIN_Y, cursor + span / 2, opt);
+          cursor = hole.z1;
+        });
+        const end = z1 - cursor;
+        if (end > 0.02) box(roomRoot, mats.wall, t, WIN_H, end, xCenter, WIN_Y, cursor + end / 2, opt);
+      }
+
+      function makeSky(width, height) {
+        const geo = new THREE.PlaneGeometry(width, height, 1, 8);
+        const pos = geo.attributes.position;
+        const colors = [];
+        const top = new THREE.Color(0x07140e);
+        const bottom = new THREE.Color(0x143428);
+        const mix = new THREE.Color();
+        for (let i = 0; i < pos.count; i += 1) {
+          const v = (pos.getY(i) + height / 2) / height;
+          mix.copy(bottom).lerp(top, v * v);
+          colors.push(mix.r, mix.g, mix.b);
         }
-        const glow = new THREE.Sprite(mats.glowCyan);
-        glow.position.set(cx, cy, d + 0.15);
-        glow.scale.set(ww * 0.55, wh * 0.45, 1);
-        roomRoot.add(glow);
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        const mesh = new THREE.Mesh(geo, mats.sky);
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        return mesh;
+      }
+
+      function addPlant(parent, x, z, kind, rng) {
+        const plant = new THREE.Group();
+        plant.position.set(x, 0.18, z);
+        plant.userData.sway = rng() * Math.PI * 2;
+        const h = 0.62 + rng() * 0.7;
+        const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.05, h, 5), mats.stalk);
+        stalk.position.y = h / 2;
+        stalk.castShadow = false;
+        plant.add(stalk);
+        const leafMat = kind === 1 ? mats.leafDeep : mats.leaf;
+        const budMat = kind === 0 ? mats.neonCyan : kind === 1 ? mats.neonMagenta : mats.neonAcid;
+        for (let i = 0; i < 3; i += 1) {
+          const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.03, 0.12), leafMat);
+          leaf.position.y = h * (0.42 + i * 0.16);
+          leaf.rotation.y = i * 1.15 + rng();
+          leaf.rotation.z = (i % 2 ? 1 : -1) * (0.45 + rng() * 0.25);
+          leaf.castShadow = false;
+          plant.add(leaf);
+        }
+        const bud = new THREE.Mesh(new THREE.SphereGeometry(0.08 + rng() * 0.045, 7, 5), budMat);
+        bud.position.y = h + 0.05;
+        bud.castShadow = false;
+        plant.add(bud);
+        parent.add(plant);
+      }
+
+      function addPlot(parent, x, z, pw, pd, rim, rng) {
+        box(parent, mats.soil, pw, 0.16, pd, x, 0.08, z, { cast: false, receive: false });
+        box(parent, mats.moss, pw - 0.14, 0.05, pd - 0.14, x, 0.16, z, { cast: false, receive: false });
+        const f = 0.05;
+        box(parent, rim, pw + 0.05, f, f, x, 0.18, z - pd / 2, { cast: false, receive: false });
+        box(parent, rim, pw + 0.05, f, f, x, 0.18, z + pd / 2, { cast: false, receive: false });
+        box(parent, rim, f, f, pd, x - pw / 2, 0.18, z, { cast: false, receive: false });
+        box(parent, rim, f, f, pd, x + pw / 2, 0.18, z, { cast: false, receive: false });
+        const cols = Math.max(2, Math.round(pw / 0.72));
+        const rows = Math.max(2, Math.round(pd / 0.72));
+        for (let i = 0; i < cols; i += 1) {
+          for (let j = 0; j < rows; j += 1) {
+            const px = x - pw / 2 + (i + 0.5) * (pw / cols) + (rng() - 0.5) * 0.06;
+            const pz = z - pd / 2 + (j + 0.5) * (pd / rows) + (rng() - 0.5) * 0.06;
+            addPlant(parent, px, pz, (i + j + Math.floor(rng() * 2)) % 3, rng);
+          }
+        }
+      }
+
+      function addGarden(w, d, north, side) {
+        const view = new THREE.Group();
+        roomRoot.add(view);
+        const rng = mulberry32((w * 17 + d * 53) >>> 0);
+
+        const skyN = makeSky(w + 18, 8.6);
+        skyN.position.set(w / 2, 3.7, d + 10.2);
+        view.add(skyN);
+        const skyW = makeSky(d + 8, 7.2);
+        skyW.rotation.y = Math.PI / 2;
+        skyW.position.set(-6.6, 3.2, d * 0.48);
+        view.add(skyW);
+        const skyE = makeSky(d + 8, 7.2);
+        skyE.rotation.y = -Math.PI / 2;
+        skyE.position.set(w + 6.6, 3.2, d * 0.48);
+        view.add(skyE);
+
+        const groundN = new THREE.Mesh(new THREE.PlaneGeometry(w + 8, 8.6), mats.soil);
+        groundN.rotation.x = -Math.PI / 2;
+        groundN.position.set(w / 2, -0.02, d + 4.7);
+        groundN.receiveShadow = false;
+        view.add(groundN);
+        const groundW = new THREE.Mesh(new THREE.PlaneGeometry(5.6, d + 3.2), mats.soil);
+        groundW.rotation.x = -Math.PI / 2;
+        groundW.position.set(-3.15, -0.02, d * 0.48);
+        groundW.receiveShadow = false;
+        view.add(groundW);
+        const groundE = new THREE.Mesh(new THREE.PlaneGeometry(5.6, d + 3.2), mats.soil);
+        groundE.rotation.x = -Math.PI / 2;
+        groundE.position.set(w + 3.15, -0.02, d * 0.48);
+        groundE.receiveShadow = false;
+        view.add(groundE);
+
+        const rims = [mats.neonCyan, mats.neonMagenta, mats.neonAcid];
+        north.forEach((hole, i) => {
+          addPlot(view, hole.cx, d + 2.45, Math.min(hole.ww + 0.15, 2.9), 2.2, rims[i % 3], rng);
+        });
+        addPlot(view, -2.55, side.cz, 2.15, Math.min(side.wz + 0.1, 2.05), mats.neonMagenta, rng);
+        addPlot(view, w + 2.55, side.cz, 2.15, Math.min(side.wz + 0.1, 2.05), mats.neonCyan, rng);
+
+        addCanopy(view, w, d, north, side, rng);
+
+        const lamp = new THREE.PointLight(0x8dffb0, 12, 14, 2);
+        lamp.position.set(w / 2, 2.4, d + 0.8);
+        view.add(lamp);
+      }
+
+      function addCanopySheet(parent, axis, x, y, z, width, height) {
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), mats.canopy);
+        if (axis === 'x') mesh.rotation.y = Math.PI / 2;
+        if (axis === 'y') mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(x, y, z);
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        parent.add(mesh);
+      }
+
+      function addCanopy(view, w, d, north, side, rng) {
+        north.forEach((hole) => {
+          addCanopySheet(view, 'z', hole.cx, WIN_Y + 0.08, d + 0.36, hole.ww + 0.9, WIN_H * 1.08);
+          addCanopySheet(view, 'z', hole.cx, WIN_Y + 0.55, d + 0.82, hole.ww + 1.3, WIN_H + 0.7);
+          const clumps = Math.max(4, Math.round(hole.ww / 0.42));
+          for (let i = 0; i < clumps; i += 1) {
+            const clump = new THREE.Group();
+            clump.position.set(
+              hole.cx - hole.ww / 2 + ((i + 0.5) * hole.ww) / clumps,
+              WIN_Y + WIN_H / 2 - 0.02,
+              d + 0.22
+            );
+            clump.userData.sway = rng() * Math.PI * 2;
+            for (let k = 0; k < 3; k += 1) {
+              const leaf = new THREE.Mesh(
+                new THREE.BoxGeometry(0.46, 0.045, 0.16),
+                k === 2 ? mats.moss : mats.leaf
+              );
+              leaf.position.set((rng() - 0.5) * 0.12, -0.12 - k * 0.2, (rng() - 0.5) * 0.06);
+              leaf.rotation.y = rng() * Math.PI;
+              leaf.rotation.z = (rng() - 0.5) * 0.7;
+              leaf.castShadow = false;
+              clump.add(leaf);
+            }
+            view.add(clump);
+          }
+        });
+
+        addCanopySheet(view, 'x', -0.4, WIN_Y + 0.08, side.cz, side.wz + 0.75, WIN_H * 1.08);
+        addCanopySheet(view, 'x', -0.85, WIN_Y + 0.5, side.cz, side.wz + 1.1, WIN_H + 0.45);
+        addCanopySheet(view, 'x', w + 0.4, WIN_Y + 0.08, side.cz, side.wz + 0.75, WIN_H * 1.08);
+        addCanopySheet(view, 'x', w + 0.85, WIN_Y + 0.5, side.cz, side.wz + 1.1, WIN_H + 0.45);
+
+        addCanopySheet(view, 'y', w / 2, 2.2, d + 3.4, w + 6, 6.4);
+        addCanopySheet(view, 'y', -2.6, 2.15, d * 0.5, 4.2, d + 2);
+        addCanopySheet(view, 'y', w + 2.6, 2.15, d * 0.5, 4.2, d + 2);
       }
 
       function buildArchitecture(w, d) {
@@ -1444,28 +2098,36 @@
         }));
         lines.userData.ownMaterial = true;
         roomRoot.add(lines);
+        gridLines = lines;
 
-        box(roomRoot, mats.wall, t, H, d, -t / 2, H / 2, d / 2);
-        box(roomRoot, mats.wall, t, H, d, w + t / 2, H / 2, d / 2);
-        addNorthWall(w, d);
-        addPanels('z', 0.03, d);
-        addPanels('z', w - 0.03, d);
+        const north = northHoles(w);
+        const side = sideHole(d);
+        addWallAlongZ(0, d, -t / 2, [side], 'w');
+        addWallAlongZ(0, d, w + t / 2, [side], 'e');
+        addWallAlongX(-0.02, w + 0.02, d + t / 2, north, 'n');
+        north.forEach((hole) => addWindow('z', hole.cx, WIN_Y, d - 0.02, hole.ww, WIN_H, 'n'));
+        addWindow('x', 0.02, WIN_Y, side.cz, side.wz, WIN_H, 'w');
+        addWindow('x', w - 0.02, WIN_Y, side.cz, side.wz, WIN_H, 'e');
+        addPanels('z', 0.03, d, side, 'w');
+        addPanels('z', w - 0.03, d, side, 'e');
+        addGarden(w, d, north, side);
 
         box(roomRoot, mats.neonMagenta, 0.03, 0.055, d, 0.02, 0.04, d / 2, { cast: false, receive: false });
         box(roomRoot, mats.neonMagenta, 0.03, 0.055, d, w - 0.02, 0.04, d / 2, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, 0.05, 0.04, d, 0, H + 0.02, d / 2, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, 0.05, 0.04, d, w, H + 0.02, d / 2, { cast: false, receive: false });
-        box(roomRoot, mats.neonCyan, w, 0.04, 0.05, w / 2, H + 0.02, d, { cast: false, receive: false });
+        box(roomRoot, mats.neonCyan, 0.05, 0.04, d, 0, H + 0.02, d / 2, { cast: false, receive: false, wall: 'w' });
+        box(roomRoot, mats.neonCyan, 0.05, 0.04, d, w, H + 0.02, d / 2, { cast: false, receive: false, wall: 'e' });
+        box(roomRoot, mats.neonCyan, w, 0.04, 0.05, w / 2, H + 0.02, d, { cast: false, receive: false, wall: 'n' });
 
         box(roomRoot, mats.metal, w, 0.07, 0.1, w / 2, 0.035, -0.02);
         box(roomRoot, mats.neonMagenta, w, 0.028, 0.04, w / 2, 0.08, 0.01, { cast: false, receive: false });
 
         [[-0.02, -0.02], [w + 0.02, -0.02], [-0.02, d + 0.02], [w + 0.02, d + 0.02]].forEach(([x, z]) => {
-          box(roomRoot, mats.wall, 0.22, 2.55, 0.22, x, 1.2, z);
-          box(roomRoot, mats.neonCyan, 0.26, 0.05, 0.26, x, 2.5, z, { cast: false, receive: false });
+          box(roomRoot, mats.wall, 0.22, 2.55, 0.22, x, 1.2, z, { wall: 'post' });
+          box(roomRoot, mats.neonCyan, 0.26, 0.05, 0.26, x, 2.5, z, { cast: false, receive: false, wall: 'post' });
           const cap = new THREE.Sprite(mats.glowCyan);
           cap.position.set(x, 2.52, z);
           cap.scale.set(0.32, 0.32, 1);
+          cap.userData.wall = 'post';
           roomRoot.add(cap);
         });
 
@@ -1485,12 +2147,17 @@
         box(roomRoot, mats.girder, 0.16, 3.3, 0.16, -1.65, 1.45, d * 0.32);
         box(roomRoot, mats.girder, 0.14, 2.5, 0.14, w + 1.45, 1.15, d * 0.66);
         box(roomRoot, mats.girder, Math.min(3.4, w * 0.46), 0.1, 0.1, w * 0.28, 2.65, d + 1.25);
+        applyGrid();
+        applyWalls();
       }
     }
 
     function makeMaterials(THREE) {
       const rugMap = makeRugTexture(THREE);
       const glowMap = makeGlowTexture(THREE);
+      const soilMap = makeSoilTexture(THREE);
+      const poolMap = makePoolTexture(THREE);
+      const canopyMap = makeCanopyTexture(THREE);
       const std = (p) => new THREE.MeshStandardMaterial({
         roughness: 0.58,
         metalness: 0.18,
@@ -1555,18 +2222,75 @@
         can: std({ color: 0xd5d8ea, roughness: 0.32, metalness: 0.72 }),
         rug: std({ map: rugMap, color: 0xffffff, roughness: 0.96, metalness: 0, flatShading: false }),
         glass: new THREE.MeshStandardMaterial({
-          color: 0x07141c,
-          emissive: 0x00d0e0,
-          emissiveIntensity: 0.22,
-          metalness: 0.72,
-          roughness: 0.08,
+          color: 0x9eefff,
+          emissive: 0x063038,
+          emissiveIntensity: 0.08,
+          metalness: 0.05,
+          roughness: 0.04,
           transparent: true,
-          opacity: 0.34,
+          opacity: 0.14,
           side: THREE.DoubleSide,
           depthWrite: false,
         }),
+        soil: std({
+          map: soilMap,
+          color: 0xffffff,
+          roughness: 0.96,
+          metalness: 0,
+          emissive: 0xffffff,
+          emissiveMap: soilMap,
+          emissiveIntensity: 0.28,
+          flatShading: false,
+        }),
+        moss: std({
+          color: 0x1d6a4e,
+          emissive: 0x0e3a2c,
+          emissiveIntensity: 0.45,
+          roughness: 0.9,
+          metalness: 0,
+          flatShading: false,
+        }),
+        leaf: std({
+          color: 0x3dba78,
+          emissive: 0x14663c,
+          emissiveIntensity: 0.55,
+          roughness: 0.62,
+          metalness: 0.02,
+        }),
+        leafDeep: std({
+          color: 0x6e3058,
+          emissive: 0x3a1430,
+          emissiveIntensity: 0.35,
+          roughness: 0.7,
+          metalness: 0.02,
+        }),
+        stalk: std({ color: 0x3a2848, roughness: 0.7, metalness: 0.12 }),
+        canopy: new THREE.MeshStandardMaterial({
+          map: canopyMap,
+          color: 0xffffff,
+          emissive: 0x0c3a22,
+          emissiveMap: canopyMap,
+          emissiveIntensity: 0.55,
+          roughness: 0.82,
+          metalness: 0,
+          transparent: true,
+          alphaTest: 0.28,
+          side: THREE.DoubleSide,
+        }),
+        sky: new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          fog: false,
+          side: THREE.DoubleSide,
+        }),
+        pool: new THREE.MeshBasicMaterial({
+          map: poolMap,
+          transparent: true,
+          depthWrite: false,
+          fog: false,
+        }),
         neonCyan: neon(0x00f0ff),
         neonMagenta: neon(0xff1e8a),
+        neonAcid: neon(0xb8ff00),
         glowCyan: glow(0x00f0ff, 0.72),
         glowMagenta: glow(0xff1e8a, 0.5),
       };
@@ -1615,6 +2339,110 @@
       grd.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = grd;
       g.fillRect(0, 0, 64, 64);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    function makeSoilTexture(THREE) {
+      const size = 256;
+      let seed = 4177;
+      const rnd = () => {
+        seed = (seed * 16807) % 2147483647;
+        return seed / 2147483647;
+      };
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const g = c.getContext('2d');
+      g.fillStyle = '#2b1f2a';
+      g.fillRect(0, 0, size, size);
+      for (let i = 0; i < 700; i += 1) {
+        g.fillStyle = rnd() < 0.5 ? '#3a2a34' : '#161018';
+        g.fillRect(rnd() * size, rnd() * size, 2, 2);
+      }
+      for (let i = 0; i < 7; i += 1) {
+        const x = rnd() * size;
+        const y = rnd() * size;
+        const r = 26 + rnd() * 40;
+        const grd = g.createRadialGradient(x, y, 0, x, y, r);
+        grd.addColorStop(0, 'rgba(34,92,70,0.55)');
+        grd.addColorStop(1, 'rgba(34,92,70,0)');
+        g.fillStyle = grd;
+        g.beginPath();
+        g.arc(x, y, r, 0, Math.PI * 2);
+        g.fill();
+      }
+      for (let i = 0; i < 20; i += 1) {
+        g.save();
+        g.translate(rnd() * size, rnd() * size);
+        g.rotate(rnd() * Math.PI);
+        g.fillStyle = rnd() < 0.5 ? '#5a2648' : '#24504c';
+        g.fillRect(-7, -2, 14, 4);
+        g.restore();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(3, 3);
+      return tex;
+    }
+
+    function makeCanopyTexture(THREE) {
+      const size = 256;
+      let seed = 90210;
+      const rnd = () => {
+        seed = (seed * 16807) % 2147483647;
+        return seed / 2147483647;
+      };
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const g = c.getContext('2d');
+      g.fillStyle = '#0c2818';
+      g.fillRect(0, 0, size, size);
+      const greens = ['#145c32', '#1e7a40', '#0f4a28', '#2f8f4e', '#123d22', '#3dba68', '#0a3a22'];
+      for (let i = 0; i < 110; i += 1) {
+        const x = rnd() * size;
+        const y = rnd() * size;
+        const len = 16 + rnd() * 42;
+        g.save();
+        g.translate(x, y);
+        g.rotate(rnd() * Math.PI);
+        g.fillStyle = greens[Math.floor(rnd() * greens.length)];
+        g.beginPath();
+        g.ellipse(0, 0, len, len * (0.28 + rnd() * 0.22), 0, 0, Math.PI * 2);
+        g.fill();
+        g.restore();
+      }
+      g.globalCompositeOperation = 'destination-out';
+      for (let i = 0; i < 7; i += 1) {
+        g.beginPath();
+        g.fillStyle = 'rgba(0,0,0,0.9)';
+        g.arc(rnd() * size, rnd() * size, 5 + rnd() * 7, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalCompositeOperation = 'source-over';
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    function makePoolTexture(THREE) {
+      const size = 128;
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const g = c.getContext('2d');
+      const mid = size / 2;
+      const grd = g.createRadialGradient(mid, mid, 0, mid, mid, mid);
+      grd.addColorStop(0, 'rgba(6,48,46,0.95)');
+      grd.addColorStop(0.6, 'rgba(12,70,52,0.9)');
+      grd.addColorStop(0.84, 'rgba(184,255,0,0.75)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, size, size);
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
       return tex;
