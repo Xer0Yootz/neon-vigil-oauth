@@ -1,5 +1,5 @@
-/* Neon Vigil sign-in gate for the Gigas Garden page. Injected at build/serve time (vite.config.js and
-   backend/server.js); the game file itself does not load it, so the Remix build stays standalone. */
+/* Neon Vigil sign-in gate for the Gigas Garden page. The game file loads it from a tag near the top of <head>;
+   vite.config.js and backend/server.js set that tag's data-mode (or add the tag if it is missing). */
 (function () {
   var me = document.currentScript;
   var mode = (me && me.getAttribute('data-mode')) || 'server';

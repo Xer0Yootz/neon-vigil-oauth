@@ -37,7 +37,7 @@ BitChat is a stub until a real endpoint is set.
 
 ## Web app and GitHub Pages
 
-Flow: sign in, then the hub, which offers **Play Gigas Garden** and **Chat**. `/gigas-garden/` is gated. With no session it redirects to sign-in with `?next=` and returns to the game after sign-in. The game page also gets small icon links back to the hub and to chat (`web/public/auth-gate.js`). They are injected at serve or build time, so the game file itself, which is also the standalone Remix build, stays untouched.
+Flow: sign in, then the hub, which offers **Play Gigas Garden** and **Chat**. `/gigas-garden/` is gated. With no session it redirects to sign-in with `?next=` and returns to the game after sign-in. The game page also gets small icon links back to the hub and to chat (`web/public/auth-gate.js`). The game file loads the gate from a tag near the top of its `<head>`, so a hand copy to gh-pages keeps it; the build and the backend set that tag's mode.
 
 `VITE_AUTH_MODE` picks how sign-in works:
 
