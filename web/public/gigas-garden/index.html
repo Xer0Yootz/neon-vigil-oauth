@@ -670,11 +670,15 @@
           <button class="hud-btn" onclick="window.NVGame.toggleChat()">CLOSE</button>
         </div>
         <div id="chat-messages" style="max-height:260px; overflow-y:auto; font-size:11px; display:flex; flex-direction:column; gap:8px;"></div>
-        <div style="font-size:11px; color:var(--silver);">Posting needs sign-in — the game has no sign-in flow yet, so sending is off for now. Reading is live.</div>
-        <div style="display:flex; gap:6px;">
+        <div id="chat-status" style="font-size:11px; color:var(--silver);">Checking sign-in…</div>
+        <form id="chat-name-form" style="display:none; gap:6px;" onsubmit="event.preventDefault(); window.NVGame.claimChatName();">
+          <input id="chat-name-input" type="text" minlength="2" maxlength="24" autocomplete="nickname" placeholder="Pick your chat name" style="flex:1; background:#0b0414; border:1px solid var(--cyan); color:#fff; padding:8px; font-size:11px;">
+          <button class="hud-btn" type="submit">CLAIM</button>
+        </form>
+        <form id="chat-send-form" style="display:flex; gap:6px;" onsubmit="event.preventDefault(); window.NVGame.sendChat();">
           <input id="chat-input" type="text" maxlength="2000" disabled placeholder="Sign in to send…" style="flex:1; background:#0b0414; border:1px solid var(--cyan); color:#fff; padding:8px; font-size:11px;">
-          <button class="hud-btn" disabled>SEND</button>
-        </div>
+          <button class="hud-btn" id="chat-send-btn" type="submit" disabled>SEND</button>
+        </form>
       </section>
 
       <!-- Dialogue Overlay -->
@@ -2984,13 +2988,16 @@
         if (isVis) renderBuildList();
       },
 
-      /* Chat: Neon Vigil room via Supabase PostgREST (public read).
-         Publishable key only — safe for client-side use; RLS gates writes. */
+      /* Chat: Neon Vigil room via Supabase PostgREST.
+         Publishable key only — safe for client-side use; RLS and database triggers gate writes.
+         Posting reuses the sign-in from the site's Chat page (same browser, same site), so the game
+         never handles a password or a Google token itself. */
       toggleChat() {
         const modal = document.getElementById('chat-modal');
         const isVis = modal.classList.toggle('visible');
         if (isVis) {
           this.loadChatMessages();
+          this.refreshChatIdentity();
           if (!state.chatTimer) state.chatTimer = setInterval(() => this.loadChatMessages(), 5000);
         } else if (state.chatTimer) {
           clearInterval(state.chatTimer);
@@ -2998,11 +3005,133 @@
         }
       },
 
+      chatConfig() {
+        return { url: 'https://xlikqzdpctuayyqttdce.supabase.co', key: 'sb_publishable_gQIlogZ4VMNf-lg-uZEntw_M_4ngnsD' };
+      },
+
+      // The site's Supabase session (web/src/supabase.js stores it under 'nv-supabase-auth').
+      chatSession() {
+        try {
+          const s = JSON.parse(localStorage.getItem('nv-supabase-auth') || 'null');
+          if (!s || !s.access_token || !s.user || !s.user.id) return null;
+          if (s.expires_at && s.expires_at * 1000 < Date.now() + 30000) return { expired: true };
+          return { token: s.access_token, uid: s.user.id };
+        } catch (e) { return null; }
+      },
+
+      chatHeaders(token) {
+        const { key } = this.chatConfig();
+        return { apikey: key, Authorization: `Bearer ${token || key}`, 'Content-Type': 'application/json' };
+      },
+
+      // Same wording as the site's Chat page (web/src/chatNames.js).
+      chatNameMessage(err) {
+        const M = {
+          name_reserved: 'That name belongs to a Neon Vigil character. Pick a name of your own.',
+          name_taken: 'Another player already has that name. Try a different one.',
+          name_invalid: 'Names are 2 to 24 characters, with at least two letters or numbers.',
+          name_required: 'Pick your chat name before you post.',
+          name_mismatch: 'You can only post as your own chat name.',
+        };
+        if (err && M[err.hint]) return M[err.hint];
+        if (err && err.code === '23505') return M.name_taken;
+        return (err && err.message) || 'Something went wrong. Try again.';
+      },
+
+      setChatUi(mode, text) {
+        const status = document.getElementById('chat-status');
+        const nameForm = document.getElementById('chat-name-form');
+        const input = document.getElementById('chat-input');
+        const send = document.getElementById('chat-send-btn');
+        if (status) { status.textContent = text; status.style.color = mode === 'error' ? 'var(--magenta)' : 'var(--silver)'; }
+        if (nameForm) nameForm.style.display = mode === 'claim' ? 'flex' : 'none';
+        const canSend = mode === 'ready';
+        if (input) { input.disabled = !canSend; input.placeholder = canSend ? 'Type a message. Mention @Hexa or @Cyphr to ask them.' : 'Sign in to send…'; }
+        if (send) send.disabled = !canSend;
+      },
+
+      async refreshChatIdentity() {
+        const sess = this.chatSession();
+        state.chatName = null;
+        if (!sess) return this.setChatUi('off', 'To post, open Chat on the Neon Vigil site once in this browser to sign in. Reading is live.');
+        if (sess.expired) return this.setChatUi('off', 'Your chat sign-in has expired. Open Chat on the Neon Vigil site to refresh it, then come back.');
+        try {
+          const { url } = this.chatConfig();
+          const res = await fetch(`${url}/rest/v1/profiles?select=display_name&user_id=eq.${encodeURIComponent(sess.uid)}`, { headers: this.chatHeaders(sess.token) });
+          if (!res.ok) throw new Error(String(res.status));
+          const rows = await res.json();
+          if (rows.length) {
+            state.chatName = rows[0].display_name;
+            this.setChatUi('ready', `Posting as ${state.chatName}.`);
+          } else {
+            this.setChatUi('claim', 'Pick your chat name. You choose it once, and it is yours alone. Character names are kept for the characters.');
+          }
+        } catch (e) {
+          this.setChatUi('off', 'Could not check your chat name. Check connection and try again.');
+        }
+      },
+
+      async claimChatName() {
+        const sess = this.chatSession();
+        const input = document.getElementById('chat-name-input');
+        if (!sess || sess.expired || !input) return this.refreshChatIdentity();
+        const name = input.value.trim().replace(/\s+/g, ' ');
+        if (name.length < 2 || name.length > 24) return this.setChatUi('claim', this.chatNameMessage({ hint: 'name_invalid' }));
+        const { url } = this.chatConfig();
+        const res = await fetch(`${url}/rest/v1/profiles`, {
+          method: 'POST', headers: { ...this.chatHeaders(sess.token), Prefer: 'return=representation' },
+          body: JSON.stringify({ display_name: name }),
+        }).catch(() => null);
+        if (!res) return this.setChatUi('claim', 'Could not reach the chat. Try again.');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { this.setChatUi('claim', this.chatNameMessage(data)); document.getElementById('chat-status').style.color = 'var(--magenta)'; return; }
+        state.chatName = (Array.isArray(data) ? data[0] : data).display_name;
+        this.setChatUi('ready', `Name claimed. Posting as ${state.chatName}.`);
+      },
+
+      async sendChat() {
+        const sess = this.chatSession();
+        const input = document.getElementById('chat-input');
+        if (!sess || sess.expired || !state.chatName || !input) return this.refreshChatIdentity();
+        const body = input.value.trim();
+        if (!body || state.chatSending) return;
+        state.chatSending = true;
+        const { url } = this.chatConfig();
+        try {
+          // No user_name: the database fills in the claimed chat name.
+          const res = await fetch(`${url}/rest/v1/messages`, {
+            method: 'POST', headers: { ...this.chatHeaders(sess.token), Prefer: 'return=representation' },
+            body: JSON.stringify({ room_id: 'neon-vigil', user_id: sess.uid, body }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (data.hint === 'name_required') return this.refreshChatIdentity();
+            return this.setChatUi('ready', this.chatNameMessage(data));
+          }
+          input.value = '';
+          this.setChatUi('ready', `Posting as ${state.chatName}.`);
+          const row = Array.isArray(data) ? data[0] : data;
+          // @Hexa or @Cyphr: ask for one reply. The server re-checks everything and may stay quiet.
+          if (row && /@\s*(hexa|cyphr)/i.test(body.normalize('NFKC'))) {
+            fetch(`${url}/functions/v1/ai-chat`, {
+              method: 'POST', headers: this.chatHeaders(sess.token), body: JSON.stringify({ message_id: row.id }),
+            }).then(r => r.json()).then(r => {
+              if (r && r.status === 'rate_limited') this.setChatUi('ready', 'Hexa and Cyphr need a moment. Try again shortly.');
+              setTimeout(() => this.loadChatMessages(), 500);
+            }).catch(() => {});
+          }
+          this.loadChatMessages();
+        } catch (e) {
+          this.setChatUi('ready', 'Send failed. Check connection and try again.');
+        } finally {
+          state.chatSending = false;
+        }
+      },
+
       async loadChatMessages() {
         const box = document.getElementById('chat-messages');
         if (!box) return;
-        const SUPABASE_URL = 'https://xlikqzdpctuayyqttdce.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_gQIlogZ4VMNf-lg-uZEntw_M_4ngnsD';
+        const { url: SUPABASE_URL, key: SUPABASE_KEY } = this.chatConfig();
         const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         try {
           const res = await fetch(`${SUPABASE_URL}/rest/v1/messages?room_id=eq.neon-vigil&order=created_at.desc&limit=50`, {
@@ -3011,9 +3140,10 @@
           if (!res.ok) throw new Error(`chat read failed: ${res.status}`);
           const rows = await res.json();
           rows.reverse();
-          const AVATARS = { hexa: 'assets/portraits/hexa.png', 'hexa sigil': 'assets/portraits/hexa.png', cyphr: 'assets/portraits/cyphr.png' };
+          // Portraits only for real AI rows (set by the database), never for a player's chosen name.
+          const AVATARS = { hexa: 'assets/portraits/hexa.png', cyphr: 'assets/portraits/cyphr.png' };
           box.innerHTML = rows.length ? rows.map(m => {
-            const av = AVATARS[(m.user_name || '').toLowerCase()];
+            const av = m.is_ai ? AVATARS[m.character_tag] : null;
             const when = m.created_at ? new Date(m.created_at).toLocaleString() : '';
             const avHtml = av ? `<img src="${av}" alt="" width="32" height="32" style="border-radius:50%; flex:none;">` : '';
             return `<div style="display:flex; gap:8px; border:1px solid var(--cyan); padding:8px; background:#0b0414;">${avHtml}<div><div style="color:var(--magenta); font-weight:bold;">${esc(m.user_name)} <span style="color:var(--silver); font-weight:normal;">${esc(when)}</span></div><div style="color:#fff; margin-top:3px; overflow-wrap:anywhere;">${esc(m.body)}</div></div></div>`;
@@ -3058,6 +3188,9 @@
        ========================================================================= */
     const keys = {};
     window.addEventListener('keydown', (e) => {
+      // Typing in the chat boxes must not move the player or trigger game keys.
+      const tgt = e.target;
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA')) return;
       keys[e.code] = true;
       if (e.code === 'Space' || e.code === 'KeyE') window.NVGame.interactNearest();
       if (e.code === 'KeyV') window.NVGame.toggleView();
