@@ -1907,8 +1907,8 @@
         const geo = new THREE.PlaneGeometry(width, height, 1, 8);
         const pos = geo.attributes.position;
         const colors = [];
-        const top = new THREE.Color(0x3b1458);
-        const bottom = new THREE.Color(0xd2479a);
+        const top = new THREE.Color(0x07140e);
+        const bottom = new THREE.Color(0x143428);
         const mix = new THREE.Color();
         for (let i = 0; i < pos.count; i += 1) {
           const v = (pos.getY(i) + height / 2) / height;
@@ -2007,25 +2007,59 @@
         addPlot(view, -2.55, side.cz, 2.15, Math.min(side.wz + 0.1, 2.05), mats.neonMagenta, rng);
         addPlot(view, w + 2.55, side.cz, 2.15, Math.min(side.wz + 0.1, 2.05), mats.neonCyan, rng);
 
-        const pool = new THREE.Mesh(new THREE.CircleGeometry(1.15, 28), mats.pool);
-        pool.rotation.x = -Math.PI / 2;
-        pool.scale.set(1.4, 1, 1);
-        pool.position.set(Math.min(w - 0.4, w * 0.84), 0.04, d + 6.15);
-        view.add(pool);
+        addCanopy(view, w, d, north, side, rng);
 
-        for (let i = 0; i < 7; i += 1) {
-          addPlant(view, 0.4 + ((w - 0.8) * i) / 6, d + 6.3 + rng() * 1.1, i % 3, rng);
-        }
-        for (let i = 0; i < 12; i += 1) {
-          const sprite = new THREE.Sprite(rng() > 0.55 ? mats.glowMagenta : mats.glowCyan);
-          sprite.position.set(-0.4 + rng() * (w + 0.8), 0.45 + rng() * 1.7, d + 1.6 + rng() * 6.2);
-          sprite.scale.set(0.2, 0.2, 1);
-          view.add(sprite);
-        }
-
-        const lamp = new THREE.PointLight(0xffb7de, 18, 26, 2);
-        lamp.position.set(w / 2, 3.5, d + 1.1);
+        const lamp = new THREE.PointLight(0x8dffb0, 12, 14, 2);
+        lamp.position.set(w / 2, 2.4, d + 0.8);
         view.add(lamp);
+      }
+
+      function addCanopySheet(parent, axis, x, y, z, width, height) {
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), mats.canopy);
+        if (axis === 'x') mesh.rotation.y = Math.PI / 2;
+        if (axis === 'y') mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(x, y, z);
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        parent.add(mesh);
+      }
+
+      function addCanopy(view, w, d, north, side, rng) {
+        north.forEach((hole) => {
+          addCanopySheet(view, 'z', hole.cx, WIN_Y + 0.08, d + 0.36, hole.ww + 0.9, WIN_H * 1.08);
+          addCanopySheet(view, 'z', hole.cx, WIN_Y + 0.55, d + 0.82, hole.ww + 1.3, WIN_H + 0.7);
+          const clumps = Math.max(4, Math.round(hole.ww / 0.42));
+          for (let i = 0; i < clumps; i += 1) {
+            const clump = new THREE.Group();
+            clump.position.set(
+              hole.cx - hole.ww / 2 + ((i + 0.5) * hole.ww) / clumps,
+              WIN_Y + WIN_H / 2 - 0.02,
+              d + 0.22
+            );
+            clump.userData.sway = rng() * Math.PI * 2;
+            for (let k = 0; k < 3; k += 1) {
+              const leaf = new THREE.Mesh(
+                new THREE.BoxGeometry(0.46, 0.045, 0.16),
+                k === 2 ? mats.moss : mats.leaf
+              );
+              leaf.position.set((rng() - 0.5) * 0.12, -0.12 - k * 0.2, (rng() - 0.5) * 0.06);
+              leaf.rotation.y = rng() * Math.PI;
+              leaf.rotation.z = (rng() - 0.5) * 0.7;
+              leaf.castShadow = false;
+              clump.add(leaf);
+            }
+            view.add(clump);
+          }
+        });
+
+        addCanopySheet(view, 'x', -0.4, WIN_Y + 0.08, side.cz, side.wz + 0.75, WIN_H * 1.08);
+        addCanopySheet(view, 'x', -0.85, WIN_Y + 0.5, side.cz, side.wz + 1.1, WIN_H + 0.45);
+        addCanopySheet(view, 'x', w + 0.4, WIN_Y + 0.08, side.cz, side.wz + 0.75, WIN_H * 1.08);
+        addCanopySheet(view, 'x', w + 0.85, WIN_Y + 0.5, side.cz, side.wz + 1.1, WIN_H + 0.45);
+
+        addCanopySheet(view, 'y', w / 2, 2.2, d + 3.4, w + 6, 6.4);
+        addCanopySheet(view, 'y', -2.6, 2.15, d * 0.5, 4.2, d + 2);
+        addCanopySheet(view, 'y', w + 2.6, 2.15, d * 0.5, 4.2, d + 2);
       }
 
       function buildArchitecture(w, d) {
@@ -2117,6 +2151,7 @@
       const glowMap = makeGlowTexture(THREE);
       const soilMap = makeSoilTexture(THREE);
       const poolMap = makePoolTexture(THREE);
+      const canopyMap = makeCanopyTexture(THREE);
       const std = (p) => new THREE.MeshStandardMaterial({
         roughness: 0.58,
         metalness: 0.18,
@@ -2224,6 +2259,18 @@
           metalness: 0.02,
         }),
         stalk: std({ color: 0x3a2848, roughness: 0.7, metalness: 0.12 }),
+        canopy: new THREE.MeshStandardMaterial({
+          map: canopyMap,
+          color: 0xffffff,
+          emissive: 0x0c3a22,
+          emissiveMap: canopyMap,
+          emissiveIntensity: 0.55,
+          roughness: 0.82,
+          metalness: 0,
+          transparent: true,
+          alphaTest: 0.28,
+          side: THREE.DoubleSide,
+        }),
         sky: new THREE.MeshBasicMaterial({
           vertexColors: true,
           fog: false,
@@ -2333,6 +2380,46 @@
       tex.wrapS = THREE.RepeatWrapping;
       tex.wrapT = THREE.RepeatWrapping;
       tex.repeat.set(3, 3);
+      return tex;
+    }
+
+    function makeCanopyTexture(THREE) {
+      const size = 256;
+      let seed = 90210;
+      const rnd = () => {
+        seed = (seed * 16807) % 2147483647;
+        return seed / 2147483647;
+      };
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const g = c.getContext('2d');
+      g.fillStyle = '#0c2818';
+      g.fillRect(0, 0, size, size);
+      const greens = ['#145c32', '#1e7a40', '#0f4a28', '#2f8f4e', '#123d22', '#3dba68', '#0a3a22'];
+      for (let i = 0; i < 110; i += 1) {
+        const x = rnd() * size;
+        const y = rnd() * size;
+        const len = 16 + rnd() * 42;
+        g.save();
+        g.translate(x, y);
+        g.rotate(rnd() * Math.PI);
+        g.fillStyle = greens[Math.floor(rnd() * greens.length)];
+        g.beginPath();
+        g.ellipse(0, 0, len, len * (0.28 + rnd() * 0.22), 0, 0, Math.PI * 2);
+        g.fill();
+        g.restore();
+      }
+      g.globalCompositeOperation = 'destination-out';
+      for (let i = 0; i < 7; i += 1) {
+        g.beginPath();
+        g.fillStyle = 'rgba(0,0,0,0.9)';
+        g.arc(rnd() * size, rnd() * size, 5 + rnd() * 7, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalCompositeOperation = 'source-over';
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
       return tex;
     }
 
