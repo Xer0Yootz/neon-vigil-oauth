@@ -1933,14 +1933,20 @@
     praxiaGroup.add(praxiaProcedural);
     worldGroup.add(praxiaGroup);
     toonify(praxiaProcedural);
-    interactables.push({ id: 'praxia', label: 'Praxia', group: praxiaGroup, x: 0, z: 50, active: true });
+    const praxiaEntry = { id: 'praxia', label: 'Praxia', group: praxiaGroup, x: 0, z: 50, active: true };
+    interactables.push(praxiaEntry);
+    // PRAXIA BUMP SCENE (placeholder, User's direction Oct 24, 2026): bumping into Praxia
+    // triggers a scene; a battle attempt makes her run away. She cannot be synced.
+    let praxiaScene = 'idle'; // idle | armed | fleeing | gone
+    let praxiaSceneStartedAt = 0;
+    let praxiaReturnAt = 0;
 
-    // VAL-18 Stasis Pod (Infiniti 6 ship zone, starboard of the walkway)
+    // VAL-18 Stasis Pod, TRANSPARENT with the model inside (User's ruling Oct 24, 2026; "Just use Val 17" for the model)
     const podGroup = new THREE.Group();
     podGroup.position.set(4.2, 0, -8);
     const podBody = new THREE.Mesh(
       new THREE.CylinderGeometry(0.7, 0.7, 2.2, 16),
-      new THREE.MeshStandardMaterial({ color: 0xe8b4d8, metalness: 0.6, roughness: 0.25, transparent: true, opacity: 0.85 })
+      new THREE.MeshStandardMaterial({ color: 0xe8b4d8, metalness: 0.6, roughness: 0.25, transparent: true, opacity: 0.28 })
     );
     podBody.position.y = 1.5;
     const podCapTop = new THREE.Mesh(
@@ -2068,17 +2074,16 @@
       }, () => { /* procedural Praxia stays */ });
     }
 
-    // VAL-17 slot: stands beside Praxia, facing the path. Nothing renders if both copies fail to load.
-    const valGroup = new THREE.Group();
-    valGroup.position.set(4.2, 0, 47);
-    valGroup.rotation.y = Math.PI - 0.35;
-    worldGroup.add(valGroup);
+    // VAL-17: moved into the transparent VAL-18 pod (User's ruling Oct 24, 2026: "Move the current Val 17 to the pod").
+    // No longer standing beside Praxia — one VAL-17 instance only, inside the pod. Nothing renders if both copies fail to load.
     function probeValModel() {
       loadTieredGLB(FLOW_STUDIO_MANIFEST.valGLB, FLOW_STUDIO_MANIFEST.valLite, (gltf) => {
-        const model = fitModel(gltf.scene, MODEL_HEIGHT_TALL);
-        if (glbMounts.val) valGroup.remove(glbMounts.val);
+        const model = fitModel(gltf.scene, 1.8);
+        model.position.y = 0.4;
+        model.rotation.y = Math.PI - 0.35;
+        if (glbMounts.val) podGroup.remove(glbMounts.val);
         glbMounts.val = model;
-        valGroup.add(model);
+        podGroup.add(model);
         toonify(model, glbLod === 'hi');
         armModelGuard();
       }, () => { /* no VAL stand-in */ });
@@ -2131,7 +2136,7 @@
       modelGuard.done = true;
       if (glbMounts.player) { playerGroup.remove(glbMounts.player); playerGroup.add(proceduralPlayer); glbMounts.player = null; }
       if (glbMounts.praxia) { praxiaGroup.remove(glbMounts.praxia); praxiaProcedural.visible = true; glbMounts.praxia = null; }
-      if (glbMounts.val) { valGroup.remove(glbMounts.val); glbMounts.val = null; }
+      if (glbMounts.val) { podGroup.remove(glbMounts.val); glbMounts.val = null; }
     }
 
     // Creature slots: every caste uses a CC0 Quaternius bee (see assets/CREDITS.md), cloned per caste and tinted
@@ -2770,14 +2775,32 @@
             text: `${nearest.label} stored in hull cargo {icon:cargo}, User.`
           }]);
         } else if (nearest.id === 'praxia') {
-          // Exact Hard Canon Approach Line
-          queueDialogue([{
-            who: 'gridlog',
-            label: 'GRID LOG // SYNC LOCK',
-            portrait: 'praxia', // GRID LOG reads out Praxia; her profile shows beside the line
-            sys: '[STATUS: CANNOT SYNC]',
-            text: 'Praxia. You cannot sync with Praxia.'
-          }]);
+          if (praxiaScene === 'armed') {
+            // Battle attempt: she sidesteps and runs. She cannot be synced, and she cannot be fought.
+            praxiaScene = 'fleeing';
+            praxiaSceneStartedAt = performance.now();
+            queueDialogue([{
+              who: 'guide',
+              sys: '[BATTLE ATTEMPT: EVADED]',
+              text: 'Your strike meets empty air, User. Praxia sidesteps, wings flaring, and runs.'
+            }, {
+              who: 'gridlog',
+              label: 'GRID LOG // SYNC LOCK',
+              portrait: 'praxia',
+              sys: '[STATUS: CANNOT SYNC]',
+              text: 'Praxia withdrew. She cannot be synced.'
+            }]);
+          } else if (praxiaScene === 'idle') {
+            // Exact Hard Canon Approach Line
+            queueDialogue([{
+              who: 'gridlog',
+              label: 'GRID LOG // SYNC LOCK',
+              portrait: 'praxia', // GRID LOG reads out Praxia; her profile shows beside the line
+              sys: '[STATUS: CANNOT SYNC]',
+              text: 'Praxia. You cannot sync with Praxia.'
+            }]);
+          }
+          // fleeing/gone: nothing — she is already going or gone.
         } else if (nearest.id.startsWith('bug_')) {
           const key = nearest.id.replace('bug_', '');
           openEncounter(key, false);
@@ -3016,6 +3039,45 @@
         camera.lookAt(0, 1.7, playerGroup.position.z);
       }
 
+      // PRAXIA BUMP SCENE driver: contact arms the scene, a battle attempt makes her flee,
+      // and she returns to her spot after a cooldown so the placeholder scene can repeat.
+      if (praxiaGroup.visible) {
+        const pd = Math.hypot(playerGroup.position.x - praxiaGroup.position.x, playerGroup.position.z - praxiaGroup.position.z);
+        if (praxiaScene === 'idle' && pd < 2.2) {
+          praxiaScene = 'armed';
+          queueDialogue([{
+            who: 'gridlog',
+            label: 'GRID LOG // SYNC LOCK',
+            portrait: 'praxia',
+            sys: '[STATUS: CANNOT SYNC]',
+            text: 'Praxia. You cannot sync with Praxia.'
+          }, {
+            who: 'guide',
+            sys: '[PRAXIA: CONTACT]',
+            text: 'She faces you, User. INTERACT to strike — she will not sync.'
+          }]);
+        } else if (praxiaScene === 'armed' && pd > 6) {
+          praxiaScene = 'idle';
+        } else if (praxiaScene === 'fleeing') {
+          const dxp = praxiaGroup.position.x - playerGroup.position.x;
+          const dzp = praxiaGroup.position.z - playerGroup.position.z;
+          const len = Math.hypot(dxp, dzp) || 1;
+          praxiaGroup.position.x = THREE.MathUtils.clamp(praxiaGroup.position.x + (dxp / len) * 0.55, -16, 16);
+          praxiaGroup.position.z = THREE.MathUtils.clamp(praxiaGroup.position.z + (dzp / len) * 0.55, -18, 68);
+          if (pd > 28 || performance.now() - praxiaSceneStartedAt > 2600) {
+            praxiaGroup.visible = false;
+            praxiaEntry.active = false;
+            praxiaScene = 'gone';
+            praxiaReturnAt = performance.now() + 20000;
+          }
+        }
+      } else if (praxiaScene === 'gone' && performance.now() >= praxiaReturnAt) {
+        praxiaGroup.position.set(0, 0, 50);
+        praxiaGroup.visible = true;
+        praxiaEntry.active = true;
+        praxiaScene = 'idle';
+      }
+
       // Ethereal Drift Animation on Nodes & Praxia Wings
       const t = performance.now() * 0.002;
       interactables.forEach((n, idx) => {
@@ -3056,6 +3118,8 @@
       fresh.viewMode = state.viewMode;
       Object.assign(state, fresh);
       interactables.forEach((n) => { n.active = true; n.group.visible = true; });
+      praxiaGroup.position.set(0, 0, 50);
+      praxiaScene = 'idle';
       playerGroup.position.set(0, 0, -16);
       ['encounter-modal', 'gridlog-modal', 'title-modal'].forEach((id) => document.getElementById(id).classList.remove('visible'));
       document.getElementById('objective-banner').textContent = OBJECTIVE_START;
