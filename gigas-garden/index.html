@@ -510,6 +510,7 @@
       touch-action: none; pointer-events: auto; opacity: 0.85;
     }
     #nv-stick.engaged { opacity: 1; border-color: var(--magenta); }
+    @media (orientation: landscape) and (max-height: 500px) { #nv-stick { width: 104px; height: 104px; } }
     #nv-stick-knob {
       position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px;
       border-radius: 50%; background: rgba(20,8,36,0.9); border: 2px solid var(--magenta);
@@ -517,7 +518,7 @@
     }
     #nv-cam-reset {
       position: fixed; z-index: 12; right: calc(16px + env(safe-area-inset-right, 0px));
-      bottom: var(--nv-stick-bottom, 96px);
+      bottom: var(--nv-reset-bottom, 96px);
       width: 44px; height: 44px; border-radius: 50%; padding: 0;
       display: flex; align-items: center; justify-content: center;
       background: rgba(7,3,12,0.8); border: 2px solid var(--cyan); color: var(--cyan);
@@ -3436,14 +3437,25 @@
       const dlg = document.getElementById('dialogue-box');
       let layoutTick = 0;
       function layoutTouch() {
-        if (++layoutTick % 10 === 0 && root.classList.contains('nv-touch-ui')) {
-          const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
-          let bottom = window.innerHeight - barTop + 14;
+        if (++layoutTick % 2 === 0 && root.classList.contains('nv-touch-ui')) {
+          const vh = window.innerHeight, vw = window.innerWidth;
+          const barTop = bar ? bar.getBoundingClientRect().top : vh;
+          const base = vh - barTop + 14;
+          let stickBottom = base, resetBottom = base;
           if (dlg && getComputedStyle(dlg).display !== 'none') {
             const dr = dlg.getBoundingClientRect();
-            if (dr.height) bottom = Math.max(bottom, window.innerHeight - dr.top + 10);
+            // Lift a control only when the dialogue sits in its column (portrait); in landscape the
+            // dialogue is centred and the stick / reset button keep their spots at the sides.
+            if (dr.height && dr.left < stick.getBoundingClientRect().right + 6) stickBottom = Math.max(stickBottom, vh - dr.top + 10);
+            if (dr.height && dr.right > document.getElementById('nv-cam-reset').getBoundingClientRect().left - 6) resetBottom = Math.max(resetBottom, vh - dr.top + 10);
           }
-          root.style.setProperty('--nv-stick-bottom', Math.round(bottom) + 'px');
+          // Never push the stick under the top bar on short (landscape) screens.
+          const topBar = document.querySelector('.top-bar');
+          const topLimit = topBar ? topBar.getBoundingClientRect().bottom + 6 : 0;
+          stickBottom = Math.min(stickBottom, Math.max(base, vh - topLimit - 116));
+          resetBottom = Math.min(resetBottom, Math.max(base, vh - topLimit - 44));
+          root.style.setProperty('--nv-stick-bottom', Math.round(stickBottom) + 'px');
+          root.style.setProperty('--nv-reset-bottom', Math.round(resetBottom) + 'px');
           const modalOpen = !!document.querySelector('.modal-card.visible');
           touchRoot.classList.toggle('nv-hidden', modalOpen);
           if (modalOpen && stickId !== null) { stickId = null; knob.style.transform = ''; window.NVGame.setMove(0, 0); }
