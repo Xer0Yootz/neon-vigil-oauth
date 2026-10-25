@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Neon Vigil sign-in gate. Keep this tag when copying this file to gh-pages; the build and backend set data-mode. -->
+  <script src="../auth-gate.js" data-mode="google"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <meta name="theme-color" content="#050208" />
@@ -73,6 +75,9 @@
     }
 
     .top-bar, .bottom-bar { pointer-events: auto; }
+
+    /* My Room: way back to the game's Bridge (same origin, so the sign-in session carries over) */
+    .hud-btn.back-btn { min-height: 44px; display: inline-flex; align-items: center; text-decoration: none; }
 
     .top-bar {
       background: var(--panel-black);
@@ -261,6 +266,7 @@
 
   <div id="hud">
     <header class="top-bar">
+      <a class="hud-btn back-btn" id="back-bridge" href="../gigas-garden/" title="Back to the Bridge">BACK TO BRIDGE</a>
       <div class="brand">
         <h1>Room v2</h1>
         <p class="sub">Infiniti 6</p>

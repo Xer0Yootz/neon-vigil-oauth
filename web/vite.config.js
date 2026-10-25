@@ -5,8 +5,10 @@ import path from 'node:path';
 
 const GATE_TAG = /<script\b[^>]*\bsrc="[^"]*auth-gate\.js"[^>]*><\/script>/i;
 const AUTH_MODE = (process.env.VITE_AUTH_MODE || 'server').toLowerCase();
+// Pages behind the sign-in gate: the Gigas Garden game and its My Room page (Infiniti 6 quarters, Room v2).
+const GATED_PAGES = ['gigas-garden', 'infiniti6-rooms'];
 
-// Puts the sign-in gate (public/auth-gate.js) in front of the Gigas Garden page with the right data-mode.
+// Puts the sign-in gate (public/auth-gate.js) in front of each gated page with the right data-mode.
 // Dev: served on the fly. Build: written into dist.
 function gigasGate() {
   const tag = `<script src="../auth-gate.js" data-mode="${AUTH_MODE}"></script>`;
@@ -22,23 +24,29 @@ function gigasGate() {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = (req.url || '').split('?')[0];
-        const game = `${cfg.base}gigas-garden`;
-        if (url === game) {
-          res.statusCode = 302;
-          res.setHeader('Location', `${game}/`);
-          return res.end();
+        const query = (req.url || '').slice(url.length);
+        for (const dir of GATED_PAGES) {
+          const page = `${cfg.base}${dir}`;
+          if (url === page) {
+            res.statusCode = 302;
+            res.setHeader('Location', `${page}/${query}`);
+            return res.end();
+          }
+          if (url !== `${page}/` && url !== `${page}/index.html`) continue;
+          const html = fs.readFileSync(path.resolve(cfg.publicDir, `${dir}/index.html`), 'utf8');
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          return res.end(inject(html));
         }
-        if (url !== `${game}/` && url !== `${game}/index.html`) return next();
-        const html = fs.readFileSync(path.resolve(cfg.publicDir, 'gigas-garden/index.html'), 'utf8');
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-store');
-        res.end(inject(html));
+        return next();
       });
     },
     closeBundle() {
       const out = path.resolve(cfg.root, cfg.build.outDir);
-      const game = path.join(out, 'gigas-garden/index.html');
-      if (fs.existsSync(game)) fs.writeFileSync(game, inject(fs.readFileSync(game, 'utf8')));
+      for (const dir of GATED_PAGES) {
+        const file = path.join(out, `${dir}/index.html`);
+        if (fs.existsSync(file)) fs.writeFileSync(file, inject(fs.readFileSync(file, 'utf8')));
+      }
       // GitHub Pages has no SPA rewrites; its 404.html fallback boots the app on deep links like /hub.
       const index = path.join(out, 'index.html');
       if (fs.existsSync(index)) fs.copyFileSync(index, path.join(out, '404.html'));
