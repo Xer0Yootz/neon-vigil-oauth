@@ -175,7 +175,7 @@ commit;
 1. **Cyphr Q1. Who is "User", and does Cyphr say it?** (a) only your account is "User"; (b) Cyphr calls every player "User", as the game does; (c) Cyphr calls nobody "User". The draft uses (a).
 2. **Cyphr Q2. Who says "Praxia. You cannot sync with Praxia."?** (a) GRID LOG only; (b) GRID LOG in the game, with Cyphr relaying it in chat; (c) Cyphr everywhere. For now chat posts the exact line as Cyphr when someone asks about syncing with Praxia, following the v1 rule. It's never written by the model.
 3. **Cyphr Q5. What may Cyphr say about the drive and the time jump?** (a) nothing beyond "the time-warp stays out of the lesson; only the original VAL could work it"; (b) she may state the drive's requirements. The draft uses (a).
-4. **Cyphr Q14. Her hair:** (a) indigo hair; (b) the hair from the 10-22 sheet; (c) no visible hair, indigo silhouette only. The draft says "indigo silhouette" and doesn't mention hair.
+4. **Cyphr Q14. Her hair: answered.** Jasmine (10-25): white "event horizon" hair like Hexa's. Added to `personas/cyphr.md`.
 5. **Names: common real names are blocked.** Kyle, Jade, Star, Xavier, Nikita, Valerie, Roxy, Noor and "The Teacher" are canon names, so a real player called Jade can't use it. Keep them, or block only the full forms?
 6. **Names: should "Jasmine" be kept for you?** It isn't reserved now, because it isn't a character name.
 7. **Names: "Neon Vigil" and "Hex OS Sigil"** aren't reserved. Add them?
