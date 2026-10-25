@@ -3,13 +3,18 @@ import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
 
+const GATE_TAG = /<script\b[^>]*\bsrc="[^"]*auth-gate\.js"[^>]*><\/script>/i;
 const AUTH_MODE = (process.env.VITE_AUTH_MODE || 'server').toLowerCase();
 
-// Puts the sign-in gate (public/auth-gate.js) in front of the Gigas Garden page without editing the game file,
-// which is also the standalone Remix build. Dev: served on the fly. Build: written into dist.
+// Puts the sign-in gate (public/auth-gate.js) in front of the Gigas Garden page with the right data-mode.
+// Dev: served on the fly. Build: written into dist.
 function gigasGate() {
   const tag = `<script src="../auth-gate.js" data-mode="${AUTH_MODE}"></script>`;
-  const inject = (html) => html.replace(/<head>/i, (m) => `${m}\n  ${tag}`);
+  // The game file now carries the tag itself, so a hand copy to gh-pages keeps the gate. If it is there, only set
+  // its mode; otherwise add it. Either way the page loads the gate exactly once.
+  const inject = (html) => GATE_TAG.test(html)
+    ? html.replace(GATE_TAG, tag)
+    : html.replace(/<head>/i, (m) => `${m}\n  ${tag}`);
   let cfg;
   return {
     name: 'gigas-gate',

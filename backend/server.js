@@ -108,7 +108,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
 }
 
 // Gigas Garden is gated: no session sends the visitor to sign-in, then back to the game. Signed-in visitors get the
-// game page with the hub/chat icons from auth-gate.js added in. The game file itself stays the standalone Remix build.
+// game page with the hub/chat icons from auth-gate.js. The game file carries the gate tag; here its mode is set to server.
 const GAME_HTML = path.join(process.cwd(), 'web', 'public', 'gigas-garden', 'index.html');
 app.use('/gigas-garden', (req, res, next) => {
   if (req.path !== '/' && req.path !== '/index.html') return next();
@@ -116,8 +116,10 @@ app.use('/gigas-garden', (req, res, next) => {
   if (!req.isAuthenticated()) {
     return res.redirect(`${FRONTEND_URL}/?next=${encodeURIComponent('/gigas-garden/')}`);
   }
-  const html = fs.readFileSync(GAME_HTML, 'utf8')
-    .replace(/<head>/i, (m) => `${m}\n  <script src="../auth-gate.js" data-mode="server"></script>`);
+  const tag = '<script src="../auth-gate.js" data-mode="server"></script>';
+  const gate = /<script\b[^>]*\bsrc="[^"]*auth-gate\.js"[^>]*><\/script>/i; // the game file carries its own tag
+  const raw = fs.readFileSync(GAME_HTML, 'utf8');
+  const html = gate.test(raw) ? raw.replace(gate, tag) : raw.replace(/<head>/i, (m) => `${m}\n  ${tag}`);
   res.set('Cache-Control', 'no-store').type('html').send(html);
 });
 
