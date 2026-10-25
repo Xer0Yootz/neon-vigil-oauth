@@ -3368,7 +3368,8 @@
           const p = [...pts.values()][0];
           gesture = { mode: 'orbit', t0: performance.now(), x0: p.x, y0: p.y, moved: false, lx: p.x, ly: p.y };
           gesture.longTimer = setTimeout(() => {
-            if (gesture && gesture.mode === 'orbit' && !gesture.moved) { gesture.mode = 'done'; touchObjectAt(gesture.x0, gesture.y0); }
+            // Long press = touch, but the finger can still drag to orbit afterwards.
+            if (gesture && gesture.mode === 'orbit' && !gesture.moved) { gesture.longFired = true; touchObjectAt(gesture.x0, gesture.y0); }
           }, 550);
         } else if (pts.size >= 2) {
           const m = mid();
@@ -3421,7 +3422,7 @@
       function endPointer(e) {
         if (e.pointerType !== 'touch' || !pts.has(e.pointerId)) return;
         pts.delete(e.pointerId);
-        if (gesture && gesture.mode === 'orbit' && e.type === 'pointerup' && !gesture.moved && performance.now() - gesture.t0 < 350) {
+        if (gesture && gesture.mode === 'orbit' && e.type === 'pointerup' && !gesture.moved && !gesture.longFired && performance.now() - gesture.t0 < 350) {
           touchObjectAt(gesture.x0, gesture.y0);
         }
         if (gesture && gesture.longTimer) clearTimeout(gesture.longTimer);
@@ -3454,7 +3455,7 @@
           const topLimit = topBar ? topBar.getBoundingClientRect().bottom + 6 : 0;
           stickBottom = Math.min(stickBottom, Math.max(base, vh - topLimit - 116));
           resetBottom = Math.min(resetBottom, Math.max(base, vh - topLimit - 44));
-          root.style.setProperty('--nv-stick-bottom', Math.round(stickBottom) + 'px');
+          if (stickId === null) root.style.setProperty('--nv-stick-bottom', Math.round(stickBottom) + 'px'); // never move the stick under a held finger
           root.style.setProperty('--nv-reset-bottom', Math.round(resetBottom) + 'px');
           const modalOpen = !!document.querySelector('.modal-card.visible');
           touchRoot.classList.toggle('nv-hidden', modalOpen);
