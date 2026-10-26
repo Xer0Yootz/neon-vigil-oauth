@@ -946,11 +946,16 @@
     const guideName = () => SPEAKERS[GUIDE_ID].spoken || SPEAKERS[GUIDE_ID].name;
 
     // Lines use who: 'guide' (resolves to GUIDE_ID) or a SPEAKERS id. Optional label/portrait overrides.
+    // Desktop (mouse) vs phone: picks the controls line in the boot dialogue. Same test the touch UI uses.
+    const NV_DESKTOP_POINTER = !(window.matchMedia && (window.matchMedia('(pointer: coarse)').matches ||
+      (navigator.maxTouchPoints > 0 && window.matchMedia('(hover: none)').matches)));
     const BOOT_DIALOGUE = [
       { who: 'guide', sys: '', text: `${guideName()} Online.` },
       { who: 'guide', sys: '[FUEL CELL: 4% — HOUSING CRACKED]', text: 'Power containment is cracked, User. Reserve power is holding the bridge.' },
       { who: 'guide', sys: '[HULL BREACH: DECK 2 | AIRLOCK: OVERGROWN | O2 SCRUBBERS: 61%]', text: 'Garden vines forced the lower airlock. Reach the bridge console first.' },
-      { who: 'guide', sys: '[CONTROLS: {icon:move} MOVE | {icon:interact} INTERACT]', text: 'Move {icon:move} with WASD, the arrows or the pad. E, Space or INTERACT {icon:interact} to use things.' },
+      { who: 'guide', sys: '[CONTROLS: {icon:move} MOVE | {icon:interact} INTERACT]', text: NV_DESKTOP_POINTER
+        ? 'W and S {icon:move} walk, A and D turn, Shift runs. Drag to look around, scroll to zoom, click the ground to walk there. E, Space or INTERACT {icon:interact} to use things.'
+        : 'Move {icon:move} with WASD, the arrows or the pad. E, Space or INTERACT {icon:interact} to use things.' },
       { who: 'guide', sys: '[ACTION: {icon:interact} {icon:cut} {icon:gather}]', text: 'That button reads INTERACT {icon:interact}, CUT {icon:cut} or GATHER {icon:gather} for whatever is near you.' },
       { who: 'guide', sys: '[VIEW: {icon:eye} EYE ICON]', text: 'Tap the eye {icon:eye}, or press V, to switch between Garden and Side view.' },
       { who: 'guide', sys: '[TOOLS: {icon:hammer} TOOL ICON]', text: 'Tap the hammer {icon:hammer}, or press Q, to cycle your tools. {icon:fist} for now.' },
@@ -3057,8 +3062,18 @@
        10. KEYBOARD BINDINGS & MAIN RENDER LOOP (GARDEN 3D vs SIDE 2D LANE)
        ========================================================================= */
     const keys = {};
+    // Typing in chat or any text field must not move Neon or fire game keys (C would close the chat mid-word).
+    function isTypingTarget(t) {
+      return !!(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)));
+    }
     window.addEventListener('keydown', (e) => {
+      if (isTypingTarget(e.target)) {
+        if (e.code === 'Escape') e.target.blur();
+        return;
+      }
       keys[e.code] = true;
+      if (/^(Arrow(Up|Down|Left|Right)|Key[WASD])$/.test(e.code)) deskSL.cancelWalk(); // any move key cancels click-to-walk
+      if (e.code === 'KeyR' || e.code === 'Home' || e.code === 'Escape') deskSL.resetCamera();
       if (e.code === 'Space' || e.code === 'KeyE') window.NVGame.interactNearest();
       if (e.code === 'KeyV') window.NVGame.toggleView();
       if (e.code === 'KeyQ') window.NVGame.cycleTool();
@@ -3067,6 +3082,10 @@
       if (e.code === 'Escape') window.NVGame.closeConsoleMenu();
     });
     window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+    // Never leave a key stuck down when focus moves to a text field or away from the tab.
+    const clearKeys = () => { for (const k in keys) keys[k] = false; };
+    window.addEventListener('blur', clearKeys);
+    document.addEventListener('focusin', (e) => { if (isTypingTarget(e.target)) clearKeys(); });
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
@@ -3110,13 +3129,20 @@
         dx = -vx; dz = -vz;
       }
 
-      const speed = state.activeSyncForm === 'GLIDE' ? 0.22 : 0.16;
+      let speed = state.activeSyncForm === 'GLIDE' ? 0.22 : 0.16;
+      // Desktop (no touch UI), Garden view: Second Life style. W/S walk along Neon's facing,
+      // A/D turn her, Shift runs, click-to-walk heads for the clicked spot. Touch devices skip this.
+      if (state.viewMode === 'GARDEN' && deskSL.active()) {
+        const m = deskSL.step(keys, state.moveInput);
+        if (m) { dx = m.dx; dz = m.dz; speed *= m.mult; }
+      }
       if (state.viewMode === 'GARDEN') {
         // Camera looks down +z, so screen-right is -x and screen-up is +z
         playerGroup.position.x = THREE.MathUtils.clamp(playerGroup.position.x - dx * speed, -16, 16);
         let nextZ = playerGroup.position.z - dz * speed;
         if (state.vineCutsRemaining > 0 && nextZ > -1.8) nextZ = -1.8;
         playerGroup.position.z = THREE.MathUtils.clamp(nextZ, -18, 68);
+        if (deskSL.active()) deskSL.syncCamera();
 
         // 3D Third-Person Follow Camera: tight portrait framing, Neon in the lower third
         if (touchCam.isDefault()) {
@@ -3221,6 +3247,7 @@
       praxiaGroup.position.set(0, 0, 50);
       praxiaScene = 'idle';
       playerGroup.position.set(0, 0, -16);
+      if (deskSL.active()) deskSL.resetHeading();
       ['encounter-modal', 'gridlog-modal', 'title-modal', 'console-modal'].forEach((id) => document.getElementById(id).classList.remove('visible'));
       document.getElementById('objective-banner').textContent = OBJECTIVE_START;
       HostSDK.gameoverSent = false;
@@ -3264,7 +3291,7 @@
        - Two-finger swipe: detach the camera and move it freely.
        - Reset button: camera back to its default spot behind Neon.
        - Single tap (or long press) on an object in range: interact.
-       Desktop keyboard/mouse are untouched: these handlers only act on touch.
+       Desktop keyboard/mouse live in section 12: these handlers only act on touch.
        ========================================================================= */
     const CAM_BASE_EL = Math.atan2(2.3, 7.4), CAM_BASE_LEN = Math.hypot(2.3, 7.4);
     const touchCam = {
@@ -3515,6 +3542,163 @@
       requestAnimationFrame(layoutTouch);
 
       window.NVGame.touchCam = touchCam;
+    })();
+
+    /* =========================================================================
+       12. DESKTOP CONTROLS (mouse + keyboard, Second Life style)
+       - W/S or Up/Down: walk forward / back along Neon's facing. A/D or Left/Right: turn her.
+       - Shift held: run.
+       - Hold the left or right mouse button and drag: orbit the camera around Neon
+         (all the way zoomed in, the same drag looks around in first person).
+         Once she walks again the camera eases back behind her.
+       - Scroll wheel: zoom (all the way in = first person, same limits as the phone pinch).
+       - R, Home or Esc: camera back behind Neon.
+       - Single left click (no drag): on something in range, interact; on the ground, walk there.
+         Any move key cancels the walk. Walk limits and the vine gate still apply.
+       Only runs when the touch UI is off, so phone controls (section 11) are unchanged.
+       ========================================================================= */
+    const deskSL = (function initDesktopControls() {
+      const root = document.documentElement;
+      const el = renderer.domElement;
+      const TURN = 0.045, RUN = 1.8, BACK = 0.6, ORBIT_K = 0.0065, ZOOM_MIN = 0.15, ZOOM_MAX = 2.4;
+      let heading = 0, orbitYaw = 0, moving = false, walkTarget = null, stuck = 0, drag = null;
+      const lastPos = new THREE.Vector2();
+      const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+      const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hitPt = new THREE.Vector3();
+      // Walk-to marker: a flat cyan ring on the ground (code-drawn, no image file)
+      const marker = new THREE.Mesh(
+        new THREE.RingGeometry(0.28, 0.4, 32),
+        new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide })
+      );
+      marker.rotation.x = -Math.PI / 2;
+      marker.position.y = 0.05;
+      marker.visible = false;
+      scene.add(marker);
+
+      const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+      const api = {
+        active() { return !root.classList.contains('nv-touch-ui'); },
+        heading() { return heading; },
+        walkTarget() { return walkTarget ? { x: walkTarget.x, z: walkTarget.y } : null; },
+        cancelWalk() { walkTarget = null; marker.visible = false; },
+        resetCamera() {
+          if (!api.active()) return;
+          orbitYaw = 0;
+          touchCam.reset();
+          touchCam.yaw = heading;
+        },
+        resetHeading() { heading = 0; api.cancelWalk(); playerGroup.rotation.y = 0; api.resetCamera(); },
+        // Returns world-space move (in the dx/dz form the render loop uses) or null to leave pad input alone.
+        step(k, pad) {
+          moving = false;
+          const fwd = (k['KeyW'] || k['ArrowUp'] ? 1 : 0) - (k['KeyS'] || k['ArrowDown'] ? 1 : 0);
+          const turn = (k['KeyA'] || k['ArrowLeft'] ? 1 : 0) - (k['KeyD'] || k['ArrowRight'] ? 1 : 0);
+          const run = !!(k['ShiftLeft'] || k['ShiftRight']);
+          if (fwd || turn) {
+            api.cancelWalk();
+            heading = wrap(heading + turn * TURN * (run ? 1.3 : 1));
+            if (!fwd) return { dx: 0, dz: 0, mult: 1 };
+            moving = true;
+            const f = fwd > 0 ? 1 : -BACK;
+            return { dx: -Math.sin(heading) * f, dz: -Math.cos(heading) * f, mult: run ? RUN : 1 };
+          }
+          if (pad.x || pad.z) { api.cancelWalk(); return null; } // on-screen pad: unchanged
+          if (!walkTarget) return null;
+          const vx = walkTarget.x - playerGroup.position.x, vz = walkTarget.y - playerGroup.position.z;
+          const dist = Math.hypot(vx, vz);
+          if (dist < 0.25) { api.cancelWalk(); return { dx: 0, dz: 0, mult: 1 }; }
+          // Stop if something holds her in place (vine gate, walk limits)
+          if (Math.hypot(playerGroup.position.x - lastPos.x, playerGroup.position.z - lastPos.y) < 0.01) {
+            if (++stuck > 20) { api.cancelWalk(); return { dx: 0, dz: 0, mult: 1 }; }
+          } else stuck = 0;
+          lastPos.set(playerGroup.position.x, playerGroup.position.z);
+          const diff = wrap(Math.atan2(vx, vz) - heading);
+          heading = wrap(heading + THREE.MathUtils.clamp(diff, -0.18, 0.18));
+          const f = Math.max(0, Math.cos(diff)) * Math.min(1, dist / 0.3);
+          moving = f > 0;
+          return { dx: -Math.sin(heading) * f, dz: -Math.cos(heading) * f, mult: run ? RUN : 1 };
+        },
+        // Neon faces her heading; the camera sits behind it plus any orbit, easing back once she walks.
+        syncCamera() {
+          playerGroup.rotation.y = heading;
+          if (moving && !drag) {
+            orbitYaw *= 0.9;
+            touchCam.el += (CAM_BASE_EL - touchCam.el) * 0.1;
+          }
+          if (Math.abs(orbitYaw) < 1e-3) orbitYaw = 0;
+          if (Math.abs(touchCam.el - CAM_BASE_EL) < 1e-3) touchCam.el = CAM_BASE_EL;
+          touchCam.yaw = heading + orbitYaw;
+          if (Math.abs(touchCam.yaw) < 1e-6) touchCam.yaw = 0;
+        }
+      };
+
+      function nodeFromHit(obj) {
+        while (obj) {
+          const n = interactables.find((it) => it.group === obj);
+          if (n) return n;
+          obj = obj.parent;
+        }
+        return null;
+      }
+      function clickAt(x, y) {
+        if (state.viewMode !== 'GARDEN' && state.viewMode !== 'SIDE') return;
+        const r = el.getBoundingClientRect();
+        ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+        ray.setFromCamera(ndc, camera);
+        // Something in range under the cursor: interact (same rule as E / Space)
+        const groups = interactables.filter((n) => n.active && n.group && n.group.visible).map((n) => n.group);
+        for (const h of ray.intersectObjects(groups, true)) {
+          const n = nodeFromHit(h.object);
+          if (n && n === findNearestInteractable()) { window.NVGame.interactNearest(); return; }
+        }
+        if (state.viewMode !== 'GARDEN') return;
+        // Otherwise walk to the clicked ground spot, kept inside the walk limits and behind the vine gate
+        if (!ray.ray.intersectPlane(ground, hitPt)) return;
+        if (Math.hypot(hitPt.x - playerGroup.position.x, hitPt.z - playerGroup.position.z) > 45) return;
+        let tz = THREE.MathUtils.clamp(hitPt.z, -18, 68);
+        if (state.vineCutsRemaining > 0 && tz > -1.8) tz = -1.8;
+        walkTarget = new THREE.Vector2(THREE.MathUtils.clamp(hitPt.x, -16, 16), tz);
+        stuck = 0;
+        lastPos.set(playerGroup.position.x, playerGroup.position.z);
+        marker.position.set(walkTarget.x, 0.05, walkTarget.y);
+        marker.visible = true;
+      }
+
+      el.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'touch' || !api.active()) return; // touch: section 11 handles it
+        if (e.button !== 0 && e.button !== 2) return;
+        drag = { id: e.pointerId, button: e.button, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, moved: false };
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      });
+      el.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 6) { drag.moved = true; el.style.cursor = 'grabbing'; }
+        const ddx = e.clientX - drag.lx, ddy = e.clientY - drag.ly;
+        drag.lx = e.clientX; drag.ly = e.clientY;
+        if (drag.moved && state.viewMode === 'GARDEN') {
+          orbitYaw = wrap(orbitYaw - ddx * ORBIT_K);
+          touchCam.el = THREE.MathUtils.clamp(touchCam.el + ddy * ORBIT_K, -0.35, 1.35);
+        }
+      });
+      function endDrag(e) {
+        if (!drag || e.pointerId !== drag.id) return;
+        const d = drag;
+        drag = null;
+        el.style.cursor = '';
+        if (e.type === 'pointerup' && !d.moved && d.button === 0) clickAt(e.clientX, e.clientY);
+      }
+      el.addEventListener('pointerup', endDrag);
+      el.addEventListener('pointercancel', endDrag);
+      el.addEventListener('wheel', (e) => {
+        if (!api.active() || state.viewMode !== 'GARDEN') return;
+        e.preventDefault();
+        const k = Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015));
+        touchCam.zoom = THREE.MathUtils.clamp(touchCam.zoom * k, ZOOM_MIN, ZOOM_MAX);
+        if (Math.abs(touchCam.zoom - 1) < 0.03) touchCam.zoom = 1;
+      }, { passive: false });
+
+      window.NVGame.deskSL = api;
+      return api;
     })();
 
     applyViewMode();
