@@ -3,7 +3,7 @@
 ## 1. What changed and why
 
 1. Jasmine asked on 10-25 to take out "GRID OK | IWW VIEWPORT | DEEP TIME 5150" completely.
-2. The website's IWW desktop taskbar (the grey bar along the bottom) showed "GRID OK | IWW VIEWPORT | DEEP TIME 5150 | QUEEN: PRAXIA" next to the Start button. That text is gone. The Start button and your name on the right stay where they were.
+2. The IWW desktop page (`IWWDesktop.jsx`) had "GRID OK | IWW VIEWPORT | DEEP TIME 5150 | QUEEN: PRAXIA" in its grey bottom taskbar, next to the Start button. That text is gone. The Start button and the player name on the right stay where they were. Note: this page is not linked into the site right now (no route opens it), so players never saw it. It was removed so it can't come back if the page is turned on later.
 3. The game file had "(DEEP TIME 5150)" in a code comment at the top. Players never saw it, but it is gone too.
 4. Nothing else changed. The game's ONLINE | date | weather bar at the top is untouched, and other "5150" uses (Earth 5150, the 5150 app name, the score) are untouched.
 5. The chat AI side (Hexa and Cyphr no longer posting or mentioning this line) is in PR #7, on its own branch.
@@ -16,10 +16,10 @@
 
 ## 3. How to check it
 
-1. Wait until this pull request is merged and the site is published. Until then the live site still shows the old line.
-2. On desktop: open the site, sign in, and open the IWW desktop. Look at the grey bar along the bottom. It should show "Start" on the left and your name on the right, with no GRID OK text between them.
-3. On your phone: do the same in Safari. The bottom bar should look the same, with no GRID OK text, and nothing should overlap.
-4. In the game: open Gigas Garden. The ONLINE bar at the top should look the same as before.
+1. Wait until this pull request is merged and the site is published.
+2. On desktop: open the site and sign in. The hub, chat and game pages look exactly as before, because the removed text sat on a page that isn't linked in yet.
+3. On desktop, optional: on GitHub, open `web/src/pages/IWWDesktop.jsx` on main and press Ctrl+F (Cmd+F on a Mac) for "GRID OK". Nothing should be found. Do the same in `web/public/gigas-garden/index.html` for "DEEP TIME".
+4. On your phone: open the site in Safari and open Gigas Garden. The ONLINE bar at the top should look the same as before, with no GRID OK text anywhere.
 
 ## 4. How to undo it
 
