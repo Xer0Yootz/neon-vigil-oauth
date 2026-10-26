@@ -1655,6 +1655,299 @@
     fallenSpan.rotation.set(0, 1.2, 0.32);
     gardenScenery.add(fallenSpan);
 
+    // GREEN CANOPY + TREES (procedural, garden view only; no files to download). Built here, before any
+    // fog or mist exists, so the atmospherics still go on last as the final pass over a finished scene.
+    // Look: canon green canopy and moss (Jasmine 2026-10-25), mostly green with light magenta mixed in (leaf tips,
+    // a few leaves, crown undersides; look note 2026-10-25, moss stays green), dark trunks with faint cyan veins and draping
+    // moss like the Sickle_Coast_Canopy_01 / GigasGarden panorama plates, broad green crowns like
+    // Gigas_Garden_Glow_Forest_01. Flat cel shading with a light touch of painted bark and leaf detail.
+    // Trunks stay outside the walk limits (|x| <= 16), so the player never walks through one; limbs and
+    // crowns reach in overhead (light to medium cover, open strip down the middle) over the Garden (z 0-52) only.
+    // Instanced: 3 draw calls on lite, 4 on hi. Lite instances come first so the FPS guard's drop to lite trims them.
+    function buildGardenCanopy() {
+      let seed = 51733;
+      const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+      const group = new THREE.Group();
+      group.name = 'gardenCanopy';
+      const toonRamp = (() => { // own 3-step cel ramp (same steps as the character toon ramp)
+        const t = new THREE.DataTexture(new Uint8Array([70, 160, 255]), 3, 1, THREE.RedFormat);
+        t.minFilter = t.magFilter = THREE.NearestFilter;
+        t.needsUpdate = true;
+        return t;
+      })();
+      const canvasTex = (cv, repeat) => {
+        const t = new THREE.CanvasTexture(cv);
+        t.colorSpace = THREE.SRGBColorSpace;
+        if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+        return t;
+      };
+      // Concatenate non-indexed parts that share position / normal / uv
+      const concat = (parts) => {
+        const flat = parts.map((g) => (g.index ? g.toNonIndexed() : g));
+        const out = new THREE.BufferGeometry();
+        for (const [name, size] of [['position', 3], ['normal', 3], ['uv', 2]]) {
+          const n = flat.reduce((a, g) => a + g.attributes[name].count, 0);
+          const arr = new Float32Array(n * size);
+          let o = 0;
+          for (const g of flat) { arr.set(g.attributes[name].array, o); o += g.attributes[name].array.length; }
+          out.setAttribute(name, new THREE.BufferAttribute(arr, size));
+        }
+        return out;
+      };
+      const remapUV = (g, su, sv, ov) => { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, ov + uv.getY(i) * sv); return g; };
+
+      // ---- Placement: trees on both flanks, clear of the walk limits, the basalt spires and the plates ----
+      const trees = [];
+      for (let tries = 0; trees.length < 45 && tries < 4000; tries++) {
+        const side = trees.length % 2 ? 1 : -1;
+        const x = side * (18.8 + rnd() * 9.2);                 // |x| 18.8-28: trunk + roots stay beyond |x| = 16
+        const z = 1.5 + rnd() * 51;                            // Garden stretch only (vine blocker at z -1.8, Sutro past 52)
+        if (trees.some((t) => Math.hypot(t.x - x, t.z - z) < 3.4)) continue;
+        if (basaltPlacements.some((b) => Math.hypot(b[0] - x, b[1] - z) < b[2] + 2.4)) continue;
+        trees.push({ x, z, side, s: 0.85 + rnd() * 0.35, yaw: (side > 0 ? Math.PI : 0) + (rnd() - 0.5) * 0.9 });
+      }
+      // lite set first: every other tree along z, so the thinner set still covers the whole stretch
+      trees.sort((a, b) => a.z - b.z);
+      const ordered = trees.filter((_, i) => i % 9 < 5).concat(trees.filter((_, i) => i % 9 >= 5));
+      const liteTrees = Math.min(25, ordered.length);
+
+      // ---- Trunk: twisted tapered bole + 5 buttress roots + one limb reaching over the walk + one back limb ----
+      const LIMB_TIP = new THREE.Vector3(14.2, 10.4, 0), LIMB_BASE = new THREE.Vector3(0.2, 5.6, 0);
+      const BACK_TIP = new THREE.Vector3(-2.6, 8.2, 0.6), BACK_BASE = new THREE.Vector3(-0.1, 5.0, 0);
+      const bole = new THREE.CylinderGeometry(0.42, 0.85, 9, 8, 4, true);
+      bole.translate(0, 4.5, 0);
+      { const p = bole.attributes.position;
+        for (let i = 0; i < p.count; i++) {
+          const x = p.getX(i), y = p.getY(i), zz = p.getZ(i), a = Math.atan2(zz, x);
+          const k = 1 + 0.13 * Math.sin(a * 3 + y * 0.9) + (y < 1.5 ? (1.5 - y) * 0.22 : 0); // ridged, flared foot
+          p.setXYZ(i, x * k + Math.sin(y * 0.35) * 0.3, y, zz * k);
+        }
+        bole.computeVertexNormals(); }
+      const limbGeo = (from, to, r0, r1) => {
+        const dir = new THREE.Vector3().subVectors(to, from);
+        const g = new THREE.CylinderGeometry(r1, r0, dir.length(), 6, 2, true);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
+        g.translate((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2);
+        return remapUV(g, 1, 0.45, 0.55); // bark only, no moss band
+      };
+      const rootShape = new THREE.Shape();
+      rootShape.moveTo(0.3, 0); rootShape.lineTo(2.0, 0);
+      rootShape.quadraticCurveTo(0.75, 0.35, 0.55, 2.6); rootShape.lineTo(0.3, 2.6); rootShape.closePath();
+      const roots = [];
+      for (let k = 0; k < 5; k++) {
+        const r = new THREE.ExtrudeGeometry(rootShape, { depth: 0.26, bevelEnabled: false, curveSegments: 2 });
+        r.translate(0, 0, -0.13);
+        r.rotateY(k * (Math.PI * 2 / 5) + 0.3);
+        roots.push(remapUV(r, 0.5, 0.1, 0.0)); // mossy foot band of the bark texture
+      }
+      const trunkGeo = concat([bole, ...roots, limbGeo(LIMB_BASE, LIMB_TIP, 0.5, 0.2), limbGeo(BACK_BASE, BACK_TIP, 0.28, 0.12)]);
+
+      // Bark: violet-black with fibrous ridges, a moss band at the foot, faint cyan veins in the emissive map
+      const bark = document.createElement('canvas'); bark.width = 128; bark.height = 256;
+      const veins = document.createElement('canvas'); veins.width = 128; veins.height = 256;
+      { const g = bark.getContext('2d');
+        g.fillStyle = '#2b1c2e'; g.fillRect(0, 0, 128, 256);
+        g.globalCompositeOperation = 'multiply'; g.drawImage(makeNoiseCanvas(128), 0, 0, 128, 256); g.globalCompositeOperation = 'source-over';
+        for (let i = 0; i < 70; i++) { // fibre ridges
+          let x = rnd() * 128; g.strokeStyle = rnd() < 0.5 ? 'rgba(12,6,14,0.7)' : 'rgba(96,70,92,0.45)'; g.lineWidth = 1 + rnd() * 2;
+          g.beginPath(); g.moveTo(x, 0); for (let y = 0; y <= 256; y += 16) { x += (rnd() - 0.5) * 5; g.lineTo(x, y); } g.stroke();
+        }
+        const moss = g.createLinearGradient(0, 256, 0, 170); // canvas bottom = trunk foot
+        moss.addColorStop(0, 'rgba(46,122,66,0.95)'); moss.addColorStop(0.55, 'rgba(40,104,60,0.6)'); moss.addColorStop(1, 'rgba(40,104,60,0)');
+        g.fillStyle = moss; g.fillRect(0, 160, 128, 96);
+        for (let i = 0; i < 260; i++) { const y = 256 - Math.pow(rnd(), 1.8) * 110; g.fillStyle = rnd() < 0.25 ? 'rgba(150,220,80,0.7)' : 'rgba(58,140,74,0.7)'; g.fillRect(rnd() * 128, y, 2, 2); }
+        const v = veins.getContext('2d');
+        v.fillStyle = '#000'; v.fillRect(0, 0, 128, 256);
+        for (let i = 0; i < 4; i++) {
+          let x = rnd() * 128, y = 250; v.strokeStyle = 'rgba(34,245,255,0.85)'; v.lineWidth = 1.4;
+          v.beginPath(); v.moveTo(x, y);
+          while (y > 40) { x += (rnd() - 0.5) * 16; y -= 8 + rnd() * 14; v.lineTo(x, y); }
+          v.stroke();
+        } }
+      const barkTex = canvasTex(bark, true), veinTex = canvasTex(veins, true);
+      const trunkMat = new THREE.MeshToonMaterial({ map: barkTex, gradientMap: toonRamp, emissive: 0xffffff, emissiveMap: veinTex, emissiveIntensity: 0.4 });
+
+      // ---- Crowns and foot moss: one lumpy cel blob, tinted per instance ----
+      const blob = new THREE.SphereGeometry(1, 9, 6);
+      { const p = blob.attributes.position;
+        for (let i = 0; i < p.count; i++) {
+          const x = p.getX(i), y = p.getY(i), zz = p.getZ(i);
+          const k = 0.86 + 0.12 * Math.sin(x * 4.1 + zz * 2.3) * Math.cos(y * 3.7 + x) + 0.07 * Math.sin(zz * 6.2 + y * 5.1);
+          p.setXYZ(i, x * k, y < -0.35 ? -0.35 + (y + 0.35) * 0.4 : y * k, zz * k); // flattened underside
+        }
+        blob.computeVertexNormals(); }
+      const leaf = document.createElement('canvas'); leaf.width = leaf.height = 256;
+      { const g = leaf.getContext('2d');
+        g.fillStyle = '#2f7d3c'; g.fillRect(0, 0, 256, 256);
+        const cols = ['#1f5e32', '#2a7a3a', '#3a9444', '#4fae4a', '#246b36', '#68c24e'];
+        for (let i = 0; i < 900; i++) {
+          const x = rnd() * 256, y = rnd() * 256, l = 5 + rnd() * 7;
+          g.save(); g.translate(x, y); g.rotate(rnd() * Math.PI * 2);
+          g.fillStyle = cols[Math.floor(rnd() * cols.length)];
+          g.beginPath(); g.moveTo(-l, 0); g.quadraticCurveTo(0, -l * 0.55, l, 0); g.quadraticCurveTo(0, l * 0.55, -l, 0); g.fill();
+          g.restore();
+        }
+        // light magenta mixed into the green (look note 2026-10-25): a few magenta leaves and magenta-lit tips
+        for (let i = 0; i < 110; i++) {
+          const x = rnd() * 256, y = rnd() * 256, l = 4 + rnd() * 6;
+          g.save(); g.translate(x, y); g.rotate(rnd() * Math.PI * 2);
+          g.fillStyle = rnd() < 0.5 ? '#b8388a' : '#d652a8';
+          g.beginPath(); g.moveTo(-l, 0); g.quadraticCurveTo(0, -l * 0.55, l, 0); g.quadraticCurveTo(0, l * 0.55, -l, 0); g.fill();
+          g.restore();
+        }
+        for (let i = 0; i < 90; i++) { g.fillStyle = rnd() < 0.7 ? 'rgba(160,232,90,0.75)' : 'rgba(240,120,200,0.8)'; g.fillRect(rnd() * 256, rnd() * 256, 2, 2); } } // lit leaf tips
+      const leafTex = canvasTex(leaf, true);
+      const crownMat = new THREE.MeshToonMaterial({ map: leafTex, gradientMap: toonRamp, emissive: 0xffffff, emissiveMap: leafTex, emissiveIntensity: 0.45 });
+      crownMat.onBeforeCompile = (sh) => { // undersides of the crowns lean lightly magenta; tops stay green
+        sh.vertexShader = sh.vertexShader
+          .replace('void main() {', 'varying float vNvUp;\nvoid main() {')
+          .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+            vec3 nvN = objectNormal;
+            #ifdef USE_INSTANCING
+              nvN = mat3(instanceMatrix) * nvN;
+            #endif
+            vNvUp = normalize(mat3(modelMatrix) * nvN).y;`);
+        sh.fragmentShader = sh.fragmentShader
+          .replace('void main() {', 'varying float vNvUp;\nvoid main() {')
+          .replace('#include <map_fragment>', `#include <map_fragment>
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.72, 0.2, 0.52), 0.32 * smoothstep(0.05, -0.75, vNvUp));`);
+      };
+
+      // ---- Undergrowth ferns and hanging moss: crossed alpha cards painted on canvas ----
+      const crossed = (w, h, n, yOff) => {
+        const parts = [];
+        for (let k = 0; k < n; k++) { const q = new THREE.PlaneGeometry(w, h); q.translate(0, yOff, 0); q.rotateY(k * Math.PI / n); parts.push(q); }
+        return concat(parts);
+      };
+      const fern = document.createElement('canvas'); fern.width = 256; fern.height = 128;
+      { const g = fern.getContext('2d');
+        for (let f = 0; f < 7; f++) {
+          const a = -1.25 + f * (2.5 / 6) + (rnd() - 0.5) * 0.2, len = 80 + rnd() * 36;
+          let x = 128, y = 128;
+          const steps = 12;
+          for (let s = 1; s <= steps; s++) {
+            const t = s / steps, ang = a * (0.6 + t * 0.9);
+            const nx = 128 + Math.sin(ang) * len * t, ny = 128 - Math.cos(ang) * len * t + t * t * 26;
+            g.strokeStyle = '#2a6b34'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y); g.lineTo(nx, ny); g.stroke();
+            const pl = 13 * (1 - t * 0.7);
+            g.fillStyle = t > 0.8 ? (f % 3 === 1 ? '#d0509f' : '#7fcf52') : (s % 2 ? '#3f9a46' : '#2f8240'); // a few magenta frond tips
+            for (const sgn of [-1, 1]) {
+              g.save(); g.translate(nx, ny); g.rotate(ang + sgn * 1.15);
+              g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(pl * 0.5, -3, pl, 0); g.quadraticCurveTo(pl * 0.5, 3, 0, 0); g.fill();
+              g.restore();
+            }
+            x = nx; y = ny;
+          }
+        } }
+      const fernTex = canvasTex(fern, false);
+      const fernMat = new THREE.MeshToonMaterial({ map: fernTex, gradientMap: toonRamp, alphaTest: 0.45, side: THREE.DoubleSide, emissive: 0xffffff, emissiveMap: fernTex, emissiveIntensity: 0.25 });
+      const drape = document.createElement('canvas'); drape.width = 128; drape.height = 256;
+      { const g = drape.getContext('2d');
+        for (let i = 0; i < 26; i++) {
+          let x = 6 + rnd() * 116; const len = 90 + rnd() * 160;
+          g.strokeStyle = rnd() < 0.5 ? '#2c7a42' : '#3b9048'; g.lineWidth = 2 + rnd() * 2.5;
+          g.beginPath(); g.moveTo(x, 0);
+          for (let y = 0; y < len; y += 12) { x += (rnd() - 0.5) * 4; g.lineTo(x, y); }
+          g.stroke();
+          g.fillStyle = 'rgba(150,228,84,0.9)'; g.fillRect(x - 1.5, len - 6, 3, 6); // lit tip, as in the panorama plate
+        } }
+      const drapeTex = canvasTex(drape, false);
+      const drapeMat = new THREE.MeshToonMaterial({ map: drapeTex, gradientMap: toonRamp, alphaTest: 0.4, side: THREE.DoubleSide, emissive: 0xffffff, emissiveMap: drapeTex, emissiveIntensity: 0.3 });
+
+      // ---- Instances ----
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+      const col = new THREE.Color();
+      const CROWN_GREENS = [0x2f8a3e, 0x3a9a44, 0x267a3a, 0x45a84a, 0x2c8240];
+      const crownsLite = [], crownsHi = [], drapes = [];
+      const treeMatrices = ordered.map((t) => {
+        e.set(0, t.yaw, 0); q.setFromEuler(e);
+        return new THREE.Matrix4().compose(new THREE.Vector3(t.x, -0.15, t.z), q.clone(), new THREE.Vector3(t.s, t.s, t.s));
+      });
+      ordered.forEach((t, i) => {
+        const tm = treeMatrices[i];
+        const at = (lx, ly, lz) => new THREE.Vector3(lx, ly, lz).applyMatrix4(tm);
+        const isLite = i < liteTrees;
+        const big = (1.9 + rnd() * 0.6) * t.s;
+        // crown over the limb tip (reaches over the walk), crown on the bole top, foot moss mound
+        const list = isLite ? crownsLite : crownsHi;
+        list.push({ p: at(LIMB_TIP.x, LIMB_TIP.y + 0.5, 0), s: [big * 1.35, big * 0.75, big * 1.2], c: CROWN_GREENS[i % 5] });
+        list.push({ p: at(-0.4, 9.4, 0), s: [big * 1.25, big * 0.8, big * 1.25], c: CROWN_GREENS[(i + 2) % 5] });
+        list.push({ p: at(0, 0.15, 0), s: [1.75 * t.s, 0.5 * t.s, 1.75 * t.s], c: 0x2a6e44 });
+        // hi tier adds two mid-limb crowns, a back-limb crown and hanging moss under the reaching crown
+        crownsHi.push({ p: at(7.4, 8.6, 0.3), s: [big, big * 0.62, big * 0.95], c: CROWN_GREENS[(i + 1) % 5] });
+        crownsHi.push({ p: at(11.0, 9.9, -0.4), s: [big * 1.1, big * 0.6, big], c: CROWN_GREENS[(i + 4) % 5] });
+        crownsHi.push({ p: at(BACK_TIP.x, BACK_TIP.y + 0.3, BACK_TIP.z), s: [big * 0.85, big * 0.6, big * 0.85], c: CROWN_GREENS[(i + 3) % 5] });
+        const tip = at(LIMB_TIP.x - 0.6, LIMB_TIP.y - 0.3, 0);
+        const len = Math.min(2.6, tip.y - 4.8); // keep drape ends above the follow camera (y 3.9) and Neon
+        if (len > 0.8) drapes.push({ p: tip, len, yaw: rnd() * Math.PI });
+      });
+      const crowns = crownsLite.concat(crownsHi);
+      const finish = (im, liteCount) => {
+        im.instanceMatrix.needsUpdate = true;
+        if (im.instanceColor) im.instanceColor.needsUpdate = true;
+        im.computeBoundingSphere();
+        im.userData.noAutoHide = true;   // camera-inside test uses the single-instance geometry; skip it
+        im.userData.liteCount = liteCount;
+        im.userData.hiCount = im.count;
+        im.raycast = () => {};           // taps only ever target interactables
+        group.add(im);
+        return im;
+      };
+      const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, ordered.length);
+      treeMatrices.forEach((tm, i) => trunks.setMatrixAt(i, tm));
+      finish(trunks, liteTrees);
+      const crownMesh = new THREE.InstancedMesh(blob, crownMat, crowns.length);
+      crowns.forEach((c, i) => {
+        e.set((rnd() - 0.5) * 0.3, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.3); q.setFromEuler(e);
+        crownMesh.setMatrixAt(i, m4.compose(c.p, q, sc.set(...c.s)));
+        crownMesh.setColorAt(i, col.setHex(c.c).multiplyScalar(0.9 + rnd() * 0.2));
+      });
+      finish(crownMesh, crownsLite.length);
+
+      // Ferns: along both walkway edges and around the tree feet; clear of every interaction point and the First Water pool
+      const KEEP_CLEAR = [[-6, 14], [-9, 26], [8, 38], [5, 16], [-4, 29], [-8, 42], [10, 41], [0, 50], [2, 62]]; // createNode() spots below
+      const ferns = [];
+      for (let tries = 0; ferns.length < 170 && tries < 6000; tries++) {
+        let x, z;
+        if (rnd() < 0.7) { const s = rnd() < 0.5 ? -1 : 1; x = s * (10 + rnd() * 7); z = 1.8 + rnd() * 51; }
+        else { const t = trees[Math.floor(rnd() * trees.length)]; const a = rnd() * Math.PI * 2, d = 1.6 + rnd() * 2.4; x = t.x + Math.cos(a) * d; z = t.z + Math.sin(a) * d; }
+        if (z < 1.8 || z > 53) continue;
+        if (KEEP_CLEAR.some(([nx, nz]) => Math.hypot(nx - x, nz - z) < 3.0)) continue;
+        if (((x - 8) / 9.6) ** 2 + ((z - 38) / 6.8) ** 2 < 1) continue; // First Water pool oval
+        ferns.push([x, z, 0.75 + rnd() * 0.7, rnd() * Math.PI]);
+      }
+      const fernMesh = new THREE.InstancedMesh(crossed(1.9, 1.0, 3, 0.45), fernMat, ferns.length);
+      ferns.forEach(([x, z, s, yaw], i) => {
+        e.set(0, yaw, 0); q.setFromEuler(e);
+        fernMesh.setMatrixAt(i, m4.compose(v.set(x, 0, z), q, sc.set(s, s, s)));
+      });
+      finish(fernMesh, Math.min(70, ferns.length));
+
+      const drapeMesh = new THREE.InstancedMesh(crossed(1.3, 1, 2, -0.5), drapeMat, Math.max(1, drapes.length));
+      drapes.forEach((d, i) => {
+        e.set(0, d.yaw, 0); q.setFromEuler(e);
+        drapeMesh.setMatrixAt(i, m4.compose(d.p, q, sc.set(1, d.len, 1)));
+      });
+      drapeMesh.count = drapes.length;
+      finish(drapeMesh, 0);
+
+      // Tier sync: lite starts on the lite counts; if the FPS guard drops hi -> lite later, the canopy follows.
+      const meshes = [trunks, crownMesh, fernMesh, drapeMesh];
+      let appliedTier = null;
+      const syncTier = () => {
+        if (appliedTier === gfxTier) return;
+        appliedTier = gfxTier;
+        for (const im of meshes) im.count = gfxTier === 'hi' ? im.userData.hiCount : im.userData.liteCount;
+        drapeMesh.visible = gfxTier === 'hi' && drapes.length > 0;
+      };
+      syncTier();
+      trunks.onBeforeRender = syncTier; // runs only while the canopy is drawn; a tier change lands on the next frame
+      gardenPlates.add(group);          // garden view only (hidden in the SIDE lane, like the rocks and ruins)
+      return { group, meshes, trees: ordered.length, liteTrees, crowns: crowns.length, ferns: ferns.length, drapes: drapes.length, syncTier };
+    }
+    const gardenCanopy = buildGardenCanopy();
+
     // SIDE view: three-layer parallax from real depth (camera at x = -26 looking +x).
     // Screen speed vs the lane: near strip ~2.2x, mid plates ~0.45x, far plate ~0.27x.
     const sideLayers = new THREE.Group();
