@@ -3,6 +3,14 @@
 <head>
   <!-- Neon Vigil sign-in gate. Keep this tag when copying this file to gh-pages; the build and backend set data-mode. -->
   <script src="../auth-gate.js" data-mode="google"></script>
+  <!-- My Room test link: ?stage=room opens the Infiniti 6 room page straight away (same sign-in session). -->
+  <script>
+    (function () {
+      try {
+        if (new URLSearchParams(location.search).get('stage') === 'room') location.replace('../infiniti6-rooms/');
+      } catch (e) { /* stay on the game */ }
+    })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Neon Vigil: Gigas Garden</title>
@@ -343,6 +351,14 @@
       display: flex;
     }
 
+    /* Bridge Console menu (Bridge / My Room): big tap targets for phone and desktop */
+    #console-modal { max-width: 320px; }
+    #console-modal .console-choices { display: flex; gap: 8px; }
+    #console-modal .console-choices .hud-btn {
+      flex: 1; min-height: 48px; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 13px; letter-spacing: 1px; text-decoration: none; text-align: center;
+    }
+
     .modal-title {
       font-size: 16px;
       font-weight: bold;
@@ -623,6 +639,18 @@
           <button class="hud-btn" onclick="window.NVGame.toggleGridLog()">CLOSE</button>
         </div>
         <div id="gridlog-content" style="max-height:260px; overflow-y:auto; font-size:11px; display:flex; flex-direction:column; gap:8px;"></div>
+      </section>
+
+      <!-- 3b. BRIDGE CONSOLE menu: carry on at the Bridge, or go to My Room (infiniti6-rooms) -->
+      <section id="console-modal" class="modal-card" role="dialog" aria-modal="false" aria-labelledby="console-title">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="modal-title" id="console-title" style="border:none; padding:0;">BRIDGE CONSOLE</div>
+          <button class="hud-btn" type="button" onclick="window.NVGame.closeConsoleMenu()" aria-label="Close">CLOSE</button>
+        </div>
+        <div class="console-choices">
+          <button class="hud-btn" type="button" id="console-bridge" onclick="window.NVGame.consoleBridge()">BRIDGE</button>
+          <a class="hud-btn" id="console-room" href="../infiniti6-rooms/">MY ROOM</a>
+        </div>
       </section>
 
       <!-- 4. BUILD Modal (container units & structures) -->
@@ -2706,20 +2734,38 @@
         state.moveInput.z = z;
       },
 
+      openConsoleMenu() {
+        document.getElementById('console-modal').classList.add('visible');
+        const first = document.getElementById('console-bridge');
+        if (first) first.focus({ preventScroll: true });
+      },
+
+      closeConsoleMenu() {
+        document.getElementById('console-modal').classList.remove('visible');
+      },
+
+      // BRIDGE: the console's original behaviour (objective + Cyphr line), unchanged.
+      consoleBridge() {
+        this.closeConsoleMenu();
+        state.phaseStep = Math.max(state.phaseStep, 1);
+        document.getElementById('objective-banner').textContent = 'OBJECTIVE: Retrieve Laser Cutter from locker.';
+        queueDialogue([{
+          who: 'guide',
+          sys: '[CONSOLE LINK: DIRECT ADDRESS]',
+          text: 'Telemetry is on your HUD, User. Grab the {icon:laser} from the port locker.'
+        }]);
+      },
+
       interactNearest() {
+        // While the Bridge Console menu is open, E / Space go to its buttons, not the world.
+        if (document.getElementById('console-modal').classList.contains('visible')) return;
         const nearest = findNearestInteractable();
         if (!nearest) return;
 
         const tool = state.toolsUnlocked[state.equippedToolIdx];
 
         if (nearest.id === 'console') {
-          state.phaseStep = Math.max(state.phaseStep, 1);
-          document.getElementById('objective-banner').textContent = 'OBJECTIVE: Retrieve Laser Cutter from locker.';
-          queueDialogue([{
-            who: 'guide',
-            sys: '[CONSOLE LINK: DIRECT ADDRESS]',
-            text: 'Telemetry is on your HUD, User. Grab the {icon:laser} from the port locker.'
-          }]);
+          this.openConsoleMenu();
         } else if (nearest.id === 'val18_pod') {
           queueDialogue([{
             who: 'guide',
@@ -3018,6 +3064,7 @@
       if (e.code === 'KeyQ') window.NVGame.cycleTool();
       if (e.code === 'KeyB') window.NVGame.toggleBuildMenu();
       if (e.code === 'KeyC') window.NVGame.toggleChat();
+      if (e.code === 'Escape') window.NVGame.closeConsoleMenu();
     });
     window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
@@ -3174,7 +3221,7 @@
       praxiaGroup.position.set(0, 0, 50);
       praxiaScene = 'idle';
       playerGroup.position.set(0, 0, -16);
-      ['encounter-modal', 'gridlog-modal', 'title-modal'].forEach((id) => document.getElementById(id).classList.remove('visible'));
+      ['encounter-modal', 'gridlog-modal', 'title-modal', 'console-modal'].forEach((id) => document.getElementById(id).classList.remove('visible'));
       document.getElementById('objective-banner').textContent = OBJECTIVE_START;
       HostSDK.gameoverSent = false;
       restartThemeForPlayAgain();
