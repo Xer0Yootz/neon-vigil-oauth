@@ -15,8 +15,9 @@ This guide covers two changes to the Neon Vigil chat room (bitchat). Read it top
    2. Each reply is written by an AI model using that character's rules. Before anything is posted, the server:
       1. removes dashes;
       2. blocks every word on your banned list, rewriting once and then posting nothing;
-      3. never lets the model write the two fixed lines. "GRID OK | IWW VIEWPORT | DEEP TIME 5150" and "Praxia. You cannot sync with Praxia." are posted word for word by the server, never by the model;
-      4. when the rules don't cover a question, has Hexa say "Not on record." and Cyphr say "No record.".
+      3. never lets the model write the fixed Praxia line. "Praxia. You cannot sync with Praxia." is posted word for word by the server, never by the model;
+      4. cuts the old ship status line out of any reply. You retired that line on 10-25, so the server no longer posts it, the character rules no longer mention it, and if the model ever writes it anyway it is removed before posting. A question like "@Cyphr ship status" now gets a normal in-character answer;
+      5. when the rules don't cover a question, has Hexa say "Not on record." and Cyphr say "No record.".
    3. Limits keep it cheap and calm:
       1. 3 AI replies a minute and 30 a day for each player;
       2. 6 a minute for the whole room;
@@ -33,7 +34,7 @@ This guide covers two changes to the Neon Vigil chat room (bitchat). Read it top
 4. `supabase/functions/ai-chat/`: the reply function.
    1. `index.ts`: the entry point.
    2. `handler.ts`: the checks and limits.
-   3. `router.ts`: who answers, plus the fixed lines.
+   3. `router.ts`: who answers, plus the fixed Praxia line.
    4. `filter.ts`: the banned words, dashes and sign-off.
    5. `providers.ts`: Grok (xAI) and Gemini.
    6. `store.ts`: the database access.
@@ -113,7 +114,7 @@ Every name comes from a canon file. None were invented. "Contains" means the nam
 ### 4.4 The tests (no internet calls, no AI cost)
 1. Install Deno, then run this from the repo root:
    `deno test --node-modules-dir=none --allow-read supabase/functions/ai-chat/`
-2. You should see 20 tests pass. The tests use pretend models and a pretend database. Any real internet call makes them fail.
+2. You should see 21 tests pass. The tests use pretend models and a pretend database. Any real internet call makes them fail.
 
 ## 5. How to undo
 

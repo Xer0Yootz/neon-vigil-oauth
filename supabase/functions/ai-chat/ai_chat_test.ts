@@ -2,10 +2,10 @@
 //   deno test --node-modules-dir=none supabase/functions/ai-chat/
 import { assert, assertEquals, assertMatch, assertNotMatch } from 'jsr:@std/assert@1';
 import { handle, type Msg, type Store } from './handler.ts';
-import { firstMention, route, PRAXIA_LINE, STATUS_LINE } from './router.ts';
+import { firstMention, route, PRAXIA_LINE } from './router.ts';
 import { BANNED, bannedHits, cleanReply, stripDashes } from './filter.ts';
 import { DEFAULTS, makeProvider } from './providers.ts';
-import { extractPrompt } from './persona_lib.ts';
+import { extractPrompt, sanitizePrompt } from './persona_lib.ts';
 import { PERSONAS } from './personas.generated.ts';
 
 // Any real network call fails the test run.
@@ -90,18 +90,26 @@ Deno.test('rate limits and daily cap', async () => {
   assertEquals((await run({ counts: { room: 5 }, envOver: { AI_DAILY_CAP: '5', ROOM_PER_MINUTE: '99' } })).body.limit, 'daily_cap');
   assertEquals((await run({ counts: { user: 3 } })).res.status, 429);
 });
-Deno.test('fixed lines stay scripted: status and Praxia, no model call', async () => {
-  const s = await run({ msg: { body: '@Hexa status?' } });
-  assertEquals(s.inserted[0].body, STATUS_LINE); assertEquals(s.calls.length, 0);
+Deno.test('Praxia line stays scripted, no model call; status questions go to the model', async () => {
+  const s = await run({ msg: { body: '@Hexa status?' }, replies: ['The GRID is calm.'] });
+  assertEquals(s.inserted[0].body, 'The GRID is calm.'); assertEquals(s.calls.length, 1);
   const p = await run({ msg: { body: '@Hexa can I sync with Praxia?' } });
   assertEquals(p.inserted[0], { tag: 'cyphr', body: PRAXIA_LINE, reply_to: MID }); assertEquals(p.calls.length, 0);
   assertEquals(route('@cyphr how do I sync to praxia').kind, 'scripted');
-  assertEquals(route('@Cyphr ship status').kind, 'scripted');
+  assertEquals(route('@Cyphr ship status').kind, 'model');
+  assertEquals(route('@Hexa sitrep').kind, 'model');
   assertEquals(route("@Hexa what's the status of Xero?").kind, 'model');
 });
 Deno.test('model never posts the fixed lines or boot lines', async () => {
   const r = await run({ replies: ['Hexa Sigil Online. GRID OK | IWW VIEWPORT | DEEP TIME 5150 The GRID is calm. Praxia. You cannot sync with Praxia. Locked.'] });
   assertEquals(r.inserted[0].body, 'The GRID is calm.');
+});
+Deno.test('retired status line (Jasmine 10-25): stripped from replies and from persona prompts', async () => {
+  const r = await run({ replies: ['grid ok | iww viewport | deep time 5150 | QUEEN: PRAXIA Seals holding.'] });
+  assertEquals(r.inserted[0].body, 'Seals holding.');
+  const c = cleanReply('GRID OK IWW VIEWPORT DEEP TIME 5150', 'cyphr', false);
+  assertEquals(c.ok, false);
+  assertEquals(sanitizePrompt('A.\n- If you ever show a status line, write it exactly: GRID OK | IWW VIEWPORT | DEEP TIME 5150\nB.'), 'A.\nB.');
 });
 Deno.test('banned words: one retry, then silence', async () => {
   const retry = await run({ replies: ['The captain says hi.', 'Neon says hi.'] });
@@ -142,7 +150,7 @@ Deno.test('prompt: persona, grounding, untrusted chat wrapping', async () => {
 Deno.test('personas: Hexa canon, no held Queries or fixed lines in prompts', () => {
   const h = PERSONAS.hexa, c = PERSONAS.cyphr;
   for (const s of [h, c]) {
-    assertNotMatch(s, /\[QUERY|\(PROPOSED|GRID OK \| IWW|You cannot sync with Praxia/);
+    assertNotMatch(s, /\[QUERY|\(PROPOSED|GRID OK|IWW VIEWPORT|DEEP TIME|ship status line|You cannot sync with Praxia/i);
     assertEquals(bannedHits(s).length, 0, `banned in persona: ${bannedHits(s)}`);
   }
   assertMatch(h, /he\/they/); assertMatch(h, /data glass/); assertMatch(h, /holographic silhouette/);
