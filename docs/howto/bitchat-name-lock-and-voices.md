@@ -15,7 +15,7 @@ This guide covers two changes to the Neon Vigil chat room (bitchat). Read it top
    2. Each reply is written by an AI model using that character's rules. Before anything is posted, the server:
       1. removes dashes;
       2. blocks every word on your banned list, rewriting once and then posting nothing;
-      3. never lets the model write the fixed Praxia line. "Praxia. You cannot sync with Praxia." is posted word for word by the server, never by the model;
+      3. posts no fixed lines at all. Praxia's lines come from the book (Jasmine 10-25), so a question about syncing with Praxia goes to the model like any other, and Hexa or Cyphr answers in character without quoting a fixed line for her;
       4. cuts the old ship status line out of any reply. You retired that line on 10-25, so the server no longer posts it, the character rules no longer mention it, and if the model ever writes it anyway it is removed before posting. A question like "@Cyphr ship status" now gets a normal in-character answer;
       5. when the rules don't cover a question, has Hexa say "Not on record." and Cyphr say "No record.".
    3. Limits keep it cheap and calm:
@@ -34,7 +34,7 @@ This guide covers two changes to the Neon Vigil chat room (bitchat). Read it top
 4. `supabase/functions/ai-chat/`: the reply function.
    1. `index.ts`: the entry point.
    2. `handler.ts`: the checks and limits.
-   3. `router.ts`: who answers, plus the fixed Praxia line.
+   3. `router.ts`: who answers. There are no fixed lines.
    4. `filter.ts`: the banned words, dashes and sign-off.
    5. `providers.ts`: Grok (xAI) and Gemini.
    6. `store.ts`: the database access.
@@ -114,7 +114,7 @@ Every name comes from a canon file. None were invented. "Contains" means the nam
 ### 4.4 The tests (no internet calls, no AI cost)
 1. Install Deno, then run this from the repo root:
    `deno test --node-modules-dir=none --allow-read supabase/functions/ai-chat/`
-2. You should see 21 tests pass. The tests use pretend models and a pretend database. Any real internet call makes them fail.
+2. You should see 22 tests pass. The tests use pretend models and a pretend database. Any real internet call makes them fail.
 
 ## 5. How to undo
 
@@ -174,7 +174,7 @@ commit;
 ## 7. Open Queries
 
 1. **Cyphr Q1. Who is "User", and does Cyphr say it?** (a) only your account is "User"; (b) Cyphr calls every player "User", as the game does; (c) Cyphr calls nobody "User". The draft uses (a).
-2. **Cyphr Q2. Who says "Praxia. You cannot sync with Praxia."?** (a) GRID LOG only; (b) GRID LOG in the game, with Cyphr relaying it in chat; (c) Cyphr everywhere. For now chat posts the exact line as Cyphr when someone asks about syncing with Praxia, following the v1 rule. It's never written by the model.
+2. **Cyphr Q2 (answered by Jasmine 10-25). Who says the Praxia sync line?** Nobody in chat. That line is no longer locked, and the book decides Praxia's lines. Chat posts no fixed line for her.
 3. **Cyphr Q5. What may Cyphr say about the drive and the time jump?** (a) nothing beyond "the time-warp stays out of the lesson; only the original VAL could work it"; (b) she may state the drive's requirements. The draft uses (a).
 4. **Cyphr Q14. Her hair: answered.** Jasmine (10-25): white "event horizon" hair like Hexa's. Added to `personas/cyphr.md`.
 5. **Names: common real names are blocked.** Kyle, Jade, Star, Xavier, Nikita, Valerie, Roxy, Noor and "The Teacher" are canon names, so a real player called Jade can't use it. Keep them, or block only the full forms?

@@ -1,7 +1,6 @@
-// Who answers, and which line stays scripted.
+// Who answers. No line is scripted; the book decides Praxia's lines (Jasmine 10-25).
 export type Tag = 'hexa' | 'cyphr';
 
-export const PRAXIA_LINE = 'Praxia. You cannot sync with Praxia.';
 export const DECLINE: Record<Tag, string> = { hexa: 'Not on record.', cyphr: 'No record.' };
 export const SIGN_OFF = 'Further Directives, User?';
 
@@ -21,20 +20,12 @@ export function firstMention(body: string): Tag | null {
   return m[1].startsWith('hexa') ? 'hexa' : 'cyphr';
 }
 
-export function isPraxiaSync(body: string): boolean {
-  const t = foldText(body);
-  return /praxia/.test(t) && /\bsync/.test(t);
-}
-
 export type Route =
   | { kind: 'none' }
-  | { kind: 'scripted'; tag: Tag; text: string }
   | { kind: 'model'; tag: Tag };
 
 export function route(body: string): Route {
   const tag = firstMention(body);
   if (!tag) return { kind: 'none' };
-  // Praxia's line is fixed text, posted as Cyphr under the v1 rule (Query Q2 is open on who says it).
-  if (isPraxiaSync(body)) return { kind: 'scripted', tag: 'cyphr', text: PRAXIA_LINE };
   return { kind: 'model', tag };
 }

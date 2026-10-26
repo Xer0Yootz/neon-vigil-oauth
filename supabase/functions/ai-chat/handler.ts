@@ -92,12 +92,6 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     if (await hit()) return json(429, { status: 'rate_limited', limit: name }, cors);
   }
 
-  // Scripted lines are posted word for word. The model never writes them.
-  if (r.kind === 'scripted') {
-    await store.insertAiReply({ tag: r.tag, body: r.text, reply_to: msg.id });
-    return json(200, { status: 'replied', tag: r.tag, scripted: true }, cors);
-  }
-
   const toCreator = !!env('CREATOR_USER_ID') && env('CREATOR_USER_ID') === user.id;
   const system = buildSystem(deps.personas[r.tag], r.tag);
   const recent = (await store.recentMessages(20)).filter((m) => m.id !== msg.id);

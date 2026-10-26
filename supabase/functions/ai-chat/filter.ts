@@ -1,5 +1,5 @@
 // Output filter for every model reply, before anything is posted.
-import { DECLINE, PRAXIA_LINE, SIGN_OFF, type Tag } from './router.ts';
+import { DECLINE, SIGN_OFF, type Tag } from './router.ts';
 
 // Jasmine's banned list (2026-10-25). Matching ignores case and treats spaces and hyphens alike.
 export const BANNED = [
@@ -25,7 +25,6 @@ const FORBIDDEN = [
   /\blocked\.(?=\s|$)/gi,
   // The old status line was removed from the game and chat (Jasmine 10-25). If the model ever writes it, it is cut.
   /grid\s*ok\s*\|?\s*iww\s*viewport\s*\|?\s*deep\s*time\s*5150(\s*\|?\s*queen\s*:?\s*praxia)?/gi,
-  /praxia\.\s*you\s*cannot\s*sync\s*with\s*praxia\.?/gi,
 ];
 
 export function stripDashes(text: string): string {
@@ -70,4 +69,3 @@ export function normalizeDecline(text: string, tag: Tag): string {
     : text;
 }
 
-export { PRAXIA_LINE };
