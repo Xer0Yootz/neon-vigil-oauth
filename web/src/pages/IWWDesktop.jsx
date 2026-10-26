@@ -175,7 +175,6 @@ export default function IWWDesktop({ user, character }) {
         color: '#000'
       }}>
         <span style={{ border: '1px solid #808080', borderTopColor: '#fff', padding: '1px 6px', marginRight: 8 }}>Start</span>
-        GRID OK | IWW VIEWPORT | DEEP TIME 5150 | QUEEN: PRAXIA
         {user && <span style={{ marginLeft: 'auto' }}>{user.name}</span>}
       </div>
     </div>
