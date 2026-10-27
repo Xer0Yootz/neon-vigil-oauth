@@ -566,7 +566,7 @@
       <div class="status-canon ticker" data-ticker role="status" aria-live="off"><div class="ticker-track"><span class="ticker-run">ONLINE</span></div></div>
       <div class="hud-stats-row">
         <div style="display:flex; gap:4px; flex-wrap:wrap;">
-          <span class="pill" id="zone-pill">ZONE: INFINITI 6 DECK</span>
+          <span class="pill" id="zone-pill">ZONE: INFINITY 6 DECK</span>
           <span class="pill" id="hp-pill">INTEGRITY: 100%</span>
           <span class="pill" id="carry-pill">CARRY: 0/10</span>
           <span class="pill magenta" id="colony-pill">COLONY: 0</span>
@@ -592,7 +592,7 @@
           Wake aboard the bridge, cut the airlock vines, step into the Garden, sync with creatures, and build a refuge around the hull.
         </p>
         <div style="font-size:11px; color:var(--cyan); border-left:2px solid var(--amethyst); padding-left:8px;">
-          "Hexa Sigil Online."
+          "Cyphr Online."
         </div>
         <button class="sigil-btn" id="sigil-btn" type="button" aria-label="Tap the Hexa Sigil to begin" onclick="window.NVGame.startBootSequence()">
           <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -681,9 +681,9 @@
       <aside id="dialogue-box" aria-live="polite">
         <figure id="dialogue-portrait" style="margin:0;"><img id="dialogue-portrait-img" alt="" width="84" height="84" decoding="async"></figure>
         <div id="dialogue-body">
-          <div id="dialogue-speaker">HEXA SIGIL</div>
+          <div id="dialogue-speaker">CYPHR</div>
           <div id="dialogue-sys"></div>
-          <div id="dialogue-text">Hexa Sigil Online.</div>
+          <div id="dialogue-text">Cyphr Online.</div>
           <div style="display:flex; justify-content:flex-end;">
             <button class="hud-btn" onclick="window.NVGame.advanceDialogue()">CONTINUE ➔</button>
           </div>
@@ -939,15 +939,15 @@
        side-profile portrait (assets/portraits/<id>.png, 256 px) beside the text.
        anim: 'bob' = slight bob while the line types; 'glow' = glow pulse (holograms, no mouth flaps). */
     const SPEAKERS = {
-      hexa:    { name: 'HEXA SIGIL',  spoken: 'Hexa Sigil', portrait: 'assets/portraits/hexa.png',   accent: '#00f0ff', nameColor: '#00f0ff', anim: 'glow' },
-      cyphr:   { name: 'CYPHR',       spoken: 'Cyphr',      portrait: 'assets/portraits/cyphr.png',  accent: '#9d4edd', nameColor: '#c9a6ff', anim: 'glow' },
+      hexa:    { name: 'HEXA SIGIL',  spoken: 'Hexa Sigil', portrait: 'assets/portraits/hexa-idle.png',   accent: '#00f0ff', nameColor: '#00f0ff', anim: 'glow' },
+      cyphr:   { name: 'CYPHR',       spoken: 'Cyphr',      portrait: 'assets/portraits/cyphr-idle.png',  accent: '#9d4edd', nameColor: '#c9a6ff', anim: 'glow' },
       neon:    { name: 'NEON ULTRA',  portrait: 'assets/portraits/neon.png',   accent: '#ff1e8a', nameColor: '#ff1e8a', anim: 'bob' },
       val17:   { name: 'VAL 17',      portrait: 'assets/portraits/val17.png',  accent: '#ff6ec7', nameColor: '#ff6ec7', anim: 'bob' },
       praxia:  { name: 'PRAXIA',      portrait: 'assets/portraits/praxia.png', accent: '#ff1e8a', nameColor: '#ffb3dd', anim: 'glow' },
       gridlog: { name: 'GRID LOG',    portrait: null,                          accent: '#00f0ff', nameColor: '#00f0ff', anim: 'none' }
     };
     // In-game instructor. Swap this one value to 'cyphr' and every guide line moves to Cyphr.
-    const GUIDE_ID = 'hexa';
+    const GUIDE_ID = 'cyphr';
     const guideName = () => SPEAKERS[GUIDE_ID].spoken || SPEAKERS[GUIDE_ID].name;
 
     // Lines use who: 'guide' (resolves to GUIDE_ID) or a SPEAKERS id. Optional label/portrait overrides.
@@ -968,7 +968,7 @@
         name: 'BALT-SHELL CARRIER',
         caste: 'HAULER',
         powerSet: '+2 Carry Capacity per synced Hauler · Sync: DIG',
-        desc: 'Biological chitin carapace, 4% readable face, immune to acidic First Water. Moves fallen stone and salvage around the Infiniti 6 hull.',
+        desc: 'Biological chitin carapace, 4% readable face, immune to acidic First Water. Moves fallen stone and salvage around the Infinity 6 hull.',
         canSync: true
       },
       warden: {
@@ -2294,9 +2294,13 @@
       const sp = SPEAKERS[id] || SPEAKERS.gridlog;
       const portraitId = item.portrait || id;
       const portrait = (SPEAKERS[portraitId] && SPEAKERS[portraitId].portrait) || null;
-      return { id, sp, label: item.label || sp.name, portrait, anim: (SPEAKERS[portraitId] || sp).anim };
+      return { id, portraitId, sp, label: item.label || sp.name, portrait, anim: (SPEAKERS[portraitId] || sp).anim };
     }
+    const TALKING_PORTRAITS = { hexa: 'assets/portraits/hexa-animated.gif', cyphr: 'assets/portraits/cyphr-animated.gif' };
+    let currentIdlePortrait = null;
     function stopTyping() {
+      const im2 = document.getElementById('dialogue-portrait-img');
+      if (im2 && currentIdlePortrait) im2.src = currentIdlePortrait;
       if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
       const t = document.getElementById('dialogue-text');
       t.innerHTML = typeUnits.join('');
@@ -2307,6 +2311,8 @@
       const box = document.getElementById('dialogue-box');
       if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
       if (state.dialogueQueue.length === 0) {
+        const im0 = document.getElementById('dialogue-portrait-img');
+        if (im0 && currentIdlePortrait) im0.src = currentIdlePortrait;
         box.style.display = 'none';
         box.classList.remove('speaking');
         duckAudio(false);
@@ -2324,7 +2330,9 @@
       if (who.portrait) {
         box.classList.add('has-portrait');
         img.onerror = () => box.classList.remove('has-portrait'); // missing art: text-only line
-        if (img.getAttribute('src') !== who.portrait) img.src = who.portrait;
+        currentIdlePortrait = who.portrait;
+        img.src = who.portrait;
+        if (TALKING_PORTRAITS[who.portraitId]) img.src = TALKING_PORTRAITS[who.portraitId];
         img.alt = `${who.label} portrait`;
       } else {
         box.classList.remove('has-portrait');
@@ -2502,7 +2510,7 @@
       for (const m of rollingMistLayers) if (m.userData.hiOnly) m.visible = gfxTier === 'hi';
       document.body.classList.toggle('nv-outside', !insideShip);
       document.getElementById('zone-pill').textContent = insideShip
-        ? 'ZONE: INFINITI 6 DECK'
+        ? 'ZONE: INFINITY 6 DECK'
         : (playerGroup.position.z > 52 ? 'ZONE: SUTRO BATHS' : 'ZONE: GIGAS GARDEN');
 
       const carryMax = state.baseCarry + state.syncedCounts.HAULER * 2 + state.builds.filter(b => b.kind === 'crate').length * 2;
@@ -3016,14 +3024,35 @@
           if (!res.ok) throw new Error(`chat read failed: ${res.status}`);
           const rows = await res.json();
           rows.reverse();
-          const AVATARS = { hexa: 'assets/portraits/hexa.png', 'hexa sigil': 'assets/portraits/hexa.png', cyphr: 'assets/portraits/cyphr.png' };
+          const AVATARS = { hexa: 'assets/portraits/hexa-idle.png', 'hexa sigil': 'assets/portraits/hexa-idle.png', cyphr: 'assets/portraits/cyphr-idle.png' };
+          const TALKING_AVATARS = { hexa: 'assets/portraits/hexa-animated.gif', 'hexa sigil': 'assets/portraits/hexa-animated.gif', cyphr: 'assets/portraits/cyphr-animated.gif' };
+          if (!state.chatTypedIds) state.chatTypedIds = new Set();
           box.innerHTML = rows.length ? rows.map(m => {
             const av = AVATARS[(m.user_name || '').toLowerCase()];
             const when = m.created_at ? new Date(m.created_at).toLocaleString() : '';
-            const avHtml = av ? `<img src="${av}" alt="" width="32" height="32" style="border-radius:50%; flex:none;">` : '';
-            return `<div style="display:flex; gap:8px; border:1px solid var(--cyan); padding:8px; background:#0b0414;">${avHtml}<div><div style="color:var(--magenta); font-weight:bold;">${esc(m.user_name)} <span style="color:var(--silver); font-weight:normal;">${esc(when)}</span></div><div style="color:#fff; margin-top:3px; overflow-wrap:anywhere;">${esc(m.body)}</div></div></div>`;
+            const mid = m.id != null ? String(m.id) : ((m.created_at || '') + '|' + (m.user_name || '') + '|' + (m.body || ''));
+            const avHtml = av ? `<img class="chat-avatar" src="${av}" alt="" width="32" height="32" style="border-radius:50%; flex:none;">` : '';
+            return `<div data-chat-id="${esc(mid)}" style="display:flex; gap:8px; border:1px solid var(--cyan); padding:8px; background:#0b0414;">${avHtml}<div><div style="color:var(--magenta); font-weight:bold;">${esc(m.user_name)} <span style="color:var(--silver); font-weight:normal;">${esc(when)}</span></div><div class="chat-body" style="color:#fff; margin-top:3px; overflow-wrap:anywhere;">${esc(m.body)}</div></div></div>`;
           }).join('') : '<div style="color:var(--silver);">No messages in the room yet.</div>';
           box.scrollTop = box.scrollHeight;
+          // Chat is live talking too — but they are not typing, they are thinking.
+          // A new Hexa/Cyphr thought arrives whole (no fake typing); its avatar
+          // animates as a thinking beat, then settles back to mouthless idle.
+          if (rows.length) {
+            const last = rows[rows.length - 1];
+            const key = (last.user_name || '').toLowerCase();
+            const mid = last.id != null ? String(last.id) : ((last.created_at || '') + '|' + (last.user_name || '') + '|' + (last.body || ''));
+            if (TALKING_AVATARS[key] && !state.chatTypedIds.has(mid)) {
+              state.chatTypedIds.add(mid);
+              const el = box.querySelector('[data-chat-id="' + mid.replace(/"/g, '') + '"]');
+              const avEl = el ? el.querySelector('.chat-avatar') : null;
+              if (avEl) {
+                const idleSrc = AVATARS[key];
+                avEl.src = TALKING_AVATARS[key];
+                setTimeout(() => { avEl.src = idleSrc; }, 3000);
+              }
+            }
+          }
         } catch (e) {
           box.innerHTML = '<div style="color:var(--magenta);">Chat could not load. Check connection and try again.</div>';
         }
