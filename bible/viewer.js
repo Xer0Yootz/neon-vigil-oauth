@@ -36,3 +36,61 @@
     });
   });
 })();
+
+// Hover music (Oct 27, 2026, TEST: Neon Ultra + Himhun only).
+// Hovering a mapped character's pictures plays their track via the
+// SoundCloud widget; leaving the picture pauses it. A badge on each
+// mapped entry also works as a click-to-play fallback, since browsers
+// may block sound that starts on hover alone before any click on the page.
+// Neon Ultra = Jasmine Infiniti's own track (SoundCloud, verified top track).
+// Himhun has NO original track attached yet — her badge says so plainly;
+// no other artist's music is presented as hers. Her canon atmosphere is
+// deconstructed club, which is a style note, not a track.
+(()=>{'use strict';
+  const TRACKS={
+    'neon':'https://soundcloud.com/jasmineinfiniti/vortexxx',
+    'neon-ultra-jasmine-infiniti-2':'https://soundcloud.com/jasmineinfiniti/vortexxx',
+    'himhun':null,
+    'himhun-2':null
+  };
+  const LABELS={
+    'neon':'Pu$$y Vortexxx — Jasmine Infiniti (SoundCloud)',
+    'neon-ultra-jasmine-infiniti-2':'Pu$$y Vortexxx — Jasmine Infiniti (SoundCloud)',
+    'himhun':'No Himhun track attached yet',
+    'himhun-2':'No Himhun track attached yet'
+  };
+  let widget=null, current=null;
+  const sc=document.createElement('script');
+  sc.src='https://w.soundcloud.com/player/api.js';
+  document.head.append(sc);
+  const frame=document.createElement('iframe');
+  frame.id='nv-music-player';
+  frame.style.cssText='position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;bottom:0;left:0;border:0;';
+  frame.allow='autoplay';
+  frame.src='https://w.soundcloud.com/player/?url='+encodeURIComponent('https://soundcloud.com/jasmineinfiniti/vortexxx')+'&auto_play=false&show_artwork=false';
+  document.body.append(frame);
+  const ready=()=>{try{if(window.SC&&window.SC.Widget&&!widget)widget=window.SC.Widget(frame);}catch(err){}};
+  sc.addEventListener('load',ready);
+  const play=(id)=>{
+    const url=TRACKS[id]; if(!url)return;
+    ready(); if(!widget)return;
+    current=id;
+    try{widget.load(url,{auto_play:true,show_artwork:false});}catch(err){}
+  };
+  const pause=()=>{if(widget){try{widget.pause();}catch(err){}} current=null;};
+  Object.keys(TRACKS).forEach(id=>{
+    const el=document.getElementById(id); if(!el)return;
+    const head=el.querySelector('.entry-head'); if(!head)return;
+    const badge=document.createElement('span');
+    badge.className='nv-music-badge';
+    badge.textContent='♪ '+(TRACKS[id]?LABELS[id]:LABELS[id]+' — pick a track to wire in');
+    badge.style.cssText='cursor:pointer;font-size:11px;color:#f8d68e;';
+    badge.title=TRACKS[id]?'Hover the pictures to play; click here to play/stop':'No track attached yet';
+    badge.addEventListener('click',()=>{if(current===id)pause();else play(id);});
+    head.append(badge);
+    el.querySelectorAll('figure').forEach(fig=>{
+      fig.addEventListener('mouseenter',()=>play(id));
+      fig.addEventListener('mouseleave',pause);
+    });
+  });
+})();
