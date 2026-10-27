@@ -3020,13 +3020,41 @@
           const rows = await res.json();
           rows.reverse();
           const AVATARS = { hexa: 'assets/portraits/hexa-idle.png', 'hexa sigil': 'assets/portraits/hexa-idle.png', cyphr: 'assets/portraits/cyphr-idle.png' };
+          const TALKING_AVATARS = { hexa: 'assets/portraits/hexa-animated.gif', 'hexa sigil': 'assets/portraits/hexa-animated.gif', cyphr: 'assets/portraits/cyphr-animated.gif' };
+          if (!state.chatTypedIds) state.chatTypedIds = new Set();
           box.innerHTML = rows.length ? rows.map(m => {
             const av = AVATARS[(m.user_name || '').toLowerCase()];
             const when = m.created_at ? new Date(m.created_at).toLocaleString() : '';
-            const avHtml = av ? `<img src="${av}" alt="" width="32" height="32" style="border-radius:50%; flex:none;">` : '';
-            return `<div style="display:flex; gap:8px; border:1px solid var(--cyan); padding:8px; background:#0b0414;">${avHtml}<div><div style="color:var(--magenta); font-weight:bold;">${esc(m.user_name)} <span style="color:var(--silver); font-weight:normal;">${esc(when)}</span></div><div style="color:#fff; margin-top:3px; overflow-wrap:anywhere;">${esc(m.body)}</div></div></div>`;
+            const avHtml = av ? `<img class="chat-avatar" src="${av}" alt="" width="32" height="32" style="border-radius:50%; flex:none;">` : '';
+            const mid = m.id != null ? String(m.id) : ((m.created_at || '') + '|' + (m.user_name || '') + '|' + (m.body || ''));
+            return `<div data-chat-id="${esc(mid)}" style="display:flex; gap:8px; border:1px solid var(--cyan); padding:8px; background:#0b0414;">${avHtml}<div><div style="color:var(--magenta); font-weight:bold;">${esc(m.user_name)} <span style="color:var(--silver); font-weight:normal;">${esc(when)}</span></div><div class="chat-body" style="color:#fff; margin-top:3px; overflow-wrap:anywhere;">${esc(m.body)}</div></div></div>`;
           }).join('') : '<div style="color:var(--silver);">No messages in the room yet.</div>';
           box.scrollTop = box.scrollHeight;
+          // Chat is live talking too: the newest unseen Hexa/Cyphr message types out,
+          // its avatar animating while it types, then settling back to mouthless idle.
+          if (rows.length) {
+            const last = rows[rows.length - 1];
+            const key = (last.user_name || '').toLowerCase();
+            const mid = last.id != null ? String(last.id) : ((last.created_at || '') + '|' + (last.user_name || '') + '|' + (last.body || ''));
+            if (TALKING_AVATARS[key] && !state.chatTypedIds.has(mid)) {
+              state.chatTypedIds.add(mid);
+              const el = box.querySelector('[data-chat-id="' + mid.replace(/"/g, '') + '"]');
+              const bodyEl = el ? el.querySelector('.chat-body') : null;
+              const avEl = el ? el.querySelector('.chat-avatar') : null;
+              if (bodyEl && avEl) {
+                const full = last.body || '';
+                const idleSrc = AVATARS[key];
+                bodyEl.textContent = '';
+                avEl.src = TALKING_AVATARS[key];
+                let n = 0;
+                const ct = setInterval(() => {
+                  n = Math.min(full.length, n + 2);
+                  bodyEl.textContent = full.slice(0, n);
+                  if (n >= full.length) { clearInterval(ct); avEl.src = idleSrc; }
+                }, 30);
+              }
+            }
+          }
         } catch (e) {
           box.innerHTML = '<div style="color:var(--magenta);">Chat could not load. Check connection and try again.</div>';
         }
