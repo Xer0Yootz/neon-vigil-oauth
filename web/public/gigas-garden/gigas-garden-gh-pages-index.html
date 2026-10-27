@@ -2289,12 +2289,13 @@
       const sp = SPEAKERS[id] || SPEAKERS.gridlog;
       const portraitId = item.portrait || id;
       const portrait = (SPEAKERS[portraitId] && SPEAKERS[portraitId].portrait) || null;
-      return { id, sp, label: item.label || sp.name, portrait, anim: (SPEAKERS[portraitId] || sp).anim };
+      return { id, portraitId, sp, label: item.label || sp.name, portrait, anim: (SPEAKERS[portraitId] || sp).anim };
     }
     const TALKING_PORTRAITS = { hexa: 'assets/portraits/hexa-animated.gif', cyphr: 'assets/portraits/cyphr-animated.gif' };
+    let currentIdlePortrait = null;
     function stopTyping() {
-      const cur = document.getElementById('dialogue-box').dataset.speaker;
-      if (cur && TALKING_PORTRAITS[cur]) { const im2 = document.getElementById('dialogue-portrait-img'); if (im2 && SPEAKERS[cur]) im2.src = SPEAKERS[cur].portrait; }
+      const im2 = document.getElementById('dialogue-portrait-img');
+      if (im2 && currentIdlePortrait) im2.src = currentIdlePortrait;
       if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
       const t = document.getElementById('dialogue-text');
       t.innerHTML = typeUnits.join('');
@@ -2305,6 +2306,8 @@
       const box = document.getElementById('dialogue-box');
       if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
       if (state.dialogueQueue.length === 0) {
+        const im0 = document.getElementById('dialogue-portrait-img');
+        if (im0 && currentIdlePortrait) im0.src = currentIdlePortrait;
         box.style.display = 'none';
         box.classList.remove('speaking');
         duckAudio(false);
@@ -2322,8 +2325,9 @@
       if (who.portrait) {
         box.classList.add('has-portrait');
         img.onerror = () => box.classList.remove('has-portrait'); // missing art: text-only line
-        if (img.getAttribute('src') !== who.portrait) img.src = who.portrait;
-        if (TALKING_PORTRAITS[who.id]) img.src = TALKING_PORTRAITS[who.id];
+        currentIdlePortrait = who.portrait;
+        img.src = who.portrait;
+        if (TALKING_PORTRAITS[who.portraitId]) img.src = TALKING_PORTRAITS[who.portraitId];
         img.alt = `${who.label} portrait`;
       } else {
         box.classList.remove('has-portrait');
