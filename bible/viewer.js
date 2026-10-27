@@ -42,22 +42,23 @@
 // SoundCloud widget; leaving the picture pauses it. A badge on each
 // mapped entry also works as a click-to-play fallback, since browsers
 // may block sound that starts on hover alone before any click on the page.
-// Neon Ultra = Jasmine Infiniti's own track (SoundCloud, verified top track).
-// Himhun has NO original track attached yet — her badge says so plainly;
-// no other artist's music is presented as hers. Her canon atmosphere is
-// deconstructed club, which is a style note, not a track.
+// Neon Ultra = Jasmine Infiniti's own track (SoundCloud, verified).
+// Neon hover track, chosen by Jasmine Oct 27: LSDXOXO The Devil $$$
+// (Queen of Hell Remix 2022) — replaces Pu$$y Vortexxx.
+// Himhun's hover track: MANiC MACABRE, her own SoundCloud track
+// (verified from soundcloud.com/himhun, 2026-10-27), chosen by Jasmine.
 (()=>{'use strict';
   const TRACKS={
-    'neon':'https://soundcloud.com/jasmineinfiniti/vortexxx',
-    'neon-ultra-jasmine-infiniti-2':'https://soundcloud.com/jasmineinfiniti/vortexxx',
-    'himhun':null,
-    'himhun-2':null
+    'neon':'https://soundcloud.com/jasmineinfiniti/lsdxoxo-the-devil-444-queen-of',
+    'neon-ultra-jasmine-infiniti-2':'https://soundcloud.com/jasmineinfiniti/lsdxoxo-the-devil-444-queen-of',
+    'himhun':'https://soundcloud.com/himhun/manic-macabre',
+    'himhun-2':'https://soundcloud.com/himhun/manic-macabre'
   };
   const LABELS={
-    'neon':'Pu$$y Vortexxx — Jasmine Infiniti (SoundCloud)',
-    'neon-ultra-jasmine-infiniti-2':'Pu$$y Vortexxx — Jasmine Infiniti (SoundCloud)',
-    'himhun':'No Himhun track attached yet',
-    'himhun-2':'No Himhun track attached yet'
+    'neon':'LSDXOXO The Devil $$$ (Queen of Hell Remix 2022) — Jasmine Infiniti (SoundCloud)',
+    'neon-ultra-jasmine-infiniti-2':'LSDXOXO The Devil $$$ (Queen of Hell Remix 2022) — Jasmine Infiniti (SoundCloud)',
+    'himhun':'MANiC MACABRE — Him Hun (SoundCloud)',
+    'himhun-2':'MANiC MACABRE — Him Hun (SoundCloud)'
   };
   let widget=null, current=null;
   const sc=document.createElement('script');
@@ -67,7 +68,7 @@
   frame.id='nv-music-player';
   frame.style.cssText='position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;bottom:0;left:0;border:0;';
   frame.allow='autoplay';
-  frame.src='https://w.soundcloud.com/player/?url='+encodeURIComponent('https://soundcloud.com/jasmineinfiniti/vortexxx')+'&auto_play=false&show_artwork=false';
+  frame.src='https://w.soundcloud.com/player/?url='+encodeURIComponent('https://soundcloud.com/jasmineinfiniti/lsdxoxo-the-devil-444-queen-of')+'&auto_play=false&show_artwork=false';
   document.body.append(frame);
   const ready=()=>{try{if(window.SC&&window.SC.Widget&&!widget)widget=window.SC.Widget(frame);}catch(err){}};
   sc.addEventListener('load',ready);
