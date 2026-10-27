@@ -14,3 +14,25 @@
     img.addEventListener('mouseleave',()=>{if(poster)img.src=poster;});
   });
 })();
+
+// Tabs navigate (Oct 27, 2026): each .tabbar tab jumps to the first entry
+// where that tab is the active (.on) one, i.e. the first page of its part.
+(()=>{'use strict';
+  const firstByTab=new Map();
+  document.querySelectorAll('.entry').forEach(el=>{
+    el.querySelectorAll('.tabbar .tab.on').forEach(t=>{
+      const label=t.textContent.trim();
+      if(label&&!firstByTab.has(label))firstByTab.set(label,el.id);
+    });
+  });
+  document.querySelectorAll('.tabbar .tab').forEach(t=>{
+    const label=t.textContent.trim();
+    const target=firstByTab.get(label);
+    if(!target)return;
+    t.style.cursor='pointer';
+    t.addEventListener('click',()=>{
+      const dest=document.getElementById(target);
+      if(dest){dest.scrollIntoView();history.replaceState(null,'','#'+encodeURIComponent(target));}
+    });
+  });
+})();
