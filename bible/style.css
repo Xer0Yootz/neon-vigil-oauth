@@ -2,7 +2,7 @@
 @page { size: A4; margin: 0; }
 * { box-sizing: border-box; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 body { margin:0; font-family:'Noto Serif','Liberation Serif',serif; color:#2a1e2e; background:#fff; font-size:10pt; line-height:1.34; }
-.page { min-height:297mm; padding:12.5mm 16mm 11.4mm 16mm; position:relative; overflow:hidden; background:radial-gradient(ellipse at 50% 38%, #fffdf4 0%, #fdf6e3 58%, #f7ead0 100%); }
+.page { min-height:297mm; padding:12.5mm 16mm 11.4mm 16mm; position:relative; overflow:hidden; border:1.2mm solid #000; background:radial-gradient(ellipse at 50% 38%, #fffdf4 0%, #fdf6e3 58%, #f7ead0 100%); }
 .page::before { content:""; position:absolute; top:4mm; left:4mm; right:4mm; bottom:4mm; border:0.35mm solid #c2a059; pointer-events:none; }
 .page::after { content:""; position:absolute; top:5.4mm; left:5.4mm; right:5.4mm; bottom:5.4mm; border:0.16mm solid #d9be82; pointer-events:none; }
 .tabbar { display:flex; gap:1.4mm; margin-bottom:4.4mm; flex-wrap:wrap; align-items:flex-end; border-bottom:0.55mm solid #b9975b; }
