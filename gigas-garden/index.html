@@ -725,6 +725,8 @@
       var reduceMq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
       var weatherText = 'WEATHER STANDBY';
       var coords = null, weatherTimer = null, rotateTimer = null, rotateIdx = 0, requested = false;
+      // NV weather integration (Oct 27, 2026): live wind + code shared with the particle system.
+      var weatherCode = null, windSpeedKmh = 0, windDirectionDeg = 0;
 
       function locale() { return (navigator.languages && navigator.languages[0]) || navigator.language || 'en-US'; }
       function useFahrenheit() {
@@ -794,13 +796,13 @@
           clearTimeout(t); if (!r.ok) throw new Error('http ' + r.status); return r.json();
         }, function (e) { clearTimeout(t); throw e; });
       }
-      function offline() { weatherText = 'WEATHER OFFLINE'; render(); }
+      function offline() { weatherText = 'WEATHER OFFLINE'; weatherCode = null; windSpeedKmh = 0; windDirectionDeg = 0; render(); }
       function fetchWeather() {
         if (!coords) return offline();
         var f = useFahrenheit();
         var lat = coords.latitude.toFixed(3), lon = coords.longitude.toFixed(3);
         var wx = timedFetchJson('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
-          '&current=temperature_2m,weather_code&temperature_unit=' + (f ? 'fahrenheit' : 'celsius'));
+          '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m&temperature_unit=' + (f ? 'fahrenheit' : 'celsius'));
         var place = timedFetchJson('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + lat + '&longitude=' + lon +
           '&localityLanguage=' + encodeURIComponent(locale().split('-')[0] || 'en'))
           .then(function (g) { return g.city || g.locality || g.principalSubdivision || ''; }, function () { return ''; });
@@ -808,6 +810,9 @@
           var cur = res[0] && res[0].current;
           if (!cur || typeof cur.temperature_2m !== 'number') throw new Error('no data');
           var txt = Math.round(cur.temperature_2m) + '\u00B0' + (f ? 'F' : 'C') + ' ' + condition(cur.weather_code);
+          weatherCode = (typeof cur.weather_code === 'number') ? cur.weather_code : null;
+          windSpeedKmh = (typeof cur.wind_speed_10m === 'number') ? cur.wind_speed_10m : 0;
+          windDirectionDeg = (typeof cur.wind_direction_10m === 'number') ? cur.wind_direction_10m : 0;
           if (res[1]) txt += ' \u00B7 ' + String(res[1]).toUpperCase();
           weatherText = txt; render();
         }).catch(offline);
@@ -828,7 +833,7 @@
         } catch (e) { offline(); }
       }
       if (reduceMq) { (reduceMq.addEventListener ? reduceMq.addEventListener('change', setRotation) : reduceMq.addListener(setRotation)); }
-      window.NVTicker = { requestWeather: requestWeather, render: render, state: function () { return { weatherText: weatherText, coords: coords }; } };
+      window.NVTicker = { requestWeather: requestWeather, render: render, state: function () { return { weatherText: weatherText, coords: coords, weatherCode: weatherCode, windSpeedKmh: windSpeedKmh, windDirectionDeg: windDirectionDeg }; } };
       setRotation(); scheduleClock();
     })();
   </script>
@@ -934,8 +939,8 @@
        side-profile portrait (assets/portraits/<id>.png, 256 px) beside the text.
        anim: 'bob' = slight bob while the line types; 'glow' = glow pulse (holograms, no mouth flaps). */
     const SPEAKERS = {
-      hexa:    { name: 'HEXA SIGIL',  spoken: 'Hexa Sigil', portrait: 'assets/portraits/hexa-idle.png',   accent: '#00f0ff', nameColor: '#00f0ff', anim: 'glow' },
-      cyphr:   { name: 'CYPHR',       spoken: 'Cyphr',      portrait: 'assets/portraits/cyphr-idle.png',  accent: '#9d4edd', nameColor: '#c9a6ff', anim: 'glow' },
+      hexa:    { name: 'HEXA SIGIL',  spoken: 'Hexa Sigil', portrait: 'assets/portraits/hexa.png',   accent: '#00f0ff', nameColor: '#00f0ff', anim: 'glow' },
+      cyphr:   { name: 'CYPHR',       spoken: 'Cyphr',      portrait: 'assets/portraits/cyphr.png',  accent: '#9d4edd', nameColor: '#c9a6ff', anim: 'glow' },
       neon:    { name: 'NEON ULTRA',  portrait: 'assets/portraits/neon.png',   accent: '#ff1e8a', nameColor: '#ff1e8a', anim: 'bob' },
       val17:   { name: 'VAL 17',      portrait: 'assets/portraits/val17.png',  accent: '#ff6ec7', nameColor: '#ff6ec7', anim: 'bob' },
       praxia:  { name: 'PRAXIA',      portrait: 'assets/portraits/praxia.png', accent: '#ff1e8a', nameColor: '#ffb3dd', anim: 'glow' },
@@ -2289,13 +2294,9 @@
       const sp = SPEAKERS[id] || SPEAKERS.gridlog;
       const portraitId = item.portrait || id;
       const portrait = (SPEAKERS[portraitId] && SPEAKERS[portraitId].portrait) || null;
-      return { id, portraitId, sp, label: item.label || sp.name, portrait, anim: (SPEAKERS[portraitId] || sp).anim };
+      return { id, sp, label: item.label || sp.name, portrait, anim: (SPEAKERS[portraitId] || sp).anim };
     }
-    const TALKING_PORTRAITS = { hexa: 'assets/portraits/hexa-animated.gif', cyphr: 'assets/portraits/cyphr-animated.gif' };
-    let currentIdlePortrait = null;
     function stopTyping() {
-      const im2 = document.getElementById('dialogue-portrait-img');
-      if (im2 && currentIdlePortrait) im2.src = currentIdlePortrait;
       if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
       const t = document.getElementById('dialogue-text');
       t.innerHTML = typeUnits.join('');
@@ -2306,8 +2307,6 @@
       const box = document.getElementById('dialogue-box');
       if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
       if (state.dialogueQueue.length === 0) {
-        const im0 = document.getElementById('dialogue-portrait-img');
-        if (im0 && currentIdlePortrait) im0.src = currentIdlePortrait;
         box.style.display = 'none';
         box.classList.remove('speaking');
         duckAudio(false);
@@ -2325,9 +2324,7 @@
       if (who.portrait) {
         box.classList.add('has-portrait');
         img.onerror = () => box.classList.remove('has-portrait'); // missing art: text-only line
-        currentIdlePortrait = who.portrait;
-        img.src = who.portrait;
-        if (TALKING_PORTRAITS[who.portraitId]) img.src = TALKING_PORTRAITS[who.portraitId];
+        if (img.getAttribute('src') !== who.portrait) img.src = who.portrait;
         img.alt = `${who.label} portrait`;
       } else {
         box.classList.remove('has-portrait');
@@ -3019,35 +3016,14 @@
           if (!res.ok) throw new Error(`chat read failed: ${res.status}`);
           const rows = await res.json();
           rows.reverse();
-          const AVATARS = { hexa: 'assets/portraits/hexa-idle.png', 'hexa sigil': 'assets/portraits/hexa-idle.png', cyphr: 'assets/portraits/cyphr-idle.png' };
-          const TALKING_AVATARS = { hexa: 'assets/portraits/hexa-animated.gif', 'hexa sigil': 'assets/portraits/hexa-animated.gif', cyphr: 'assets/portraits/cyphr-animated.gif' };
-          if (!state.chatTypedIds) state.chatTypedIds = new Set();
+          const AVATARS = { hexa: 'assets/portraits/hexa.png', 'hexa sigil': 'assets/portraits/hexa.png', cyphr: 'assets/portraits/cyphr.png' };
           box.innerHTML = rows.length ? rows.map(m => {
             const av = AVATARS[(m.user_name || '').toLowerCase()];
             const when = m.created_at ? new Date(m.created_at).toLocaleString() : '';
-            const avHtml = av ? `<img class="chat-avatar" src="${av}" alt="" width="32" height="32" style="border-radius:50%; flex:none;">` : '';
-            const mid = m.id != null ? String(m.id) : ((m.created_at || '') + '|' + (m.user_name || '') + '|' + (m.body || ''));
-            return `<div data-chat-id="${esc(mid)}" style="display:flex; gap:8px; border:1px solid var(--cyan); padding:8px; background:#0b0414;">${avHtml}<div><div style="color:var(--magenta); font-weight:bold;">${esc(m.user_name)} <span style="color:var(--silver); font-weight:normal;">${esc(when)}</span></div><div class="chat-body" style="color:#fff; margin-top:3px; overflow-wrap:anywhere;">${esc(m.body)}</div></div></div>`;
+            const avHtml = av ? `<img src="${av}" alt="" width="32" height="32" style="border-radius:50%; flex:none;">` : '';
+            return `<div style="display:flex; gap:8px; border:1px solid var(--cyan); padding:8px; background:#0b0414;">${avHtml}<div><div style="color:var(--magenta); font-weight:bold;">${esc(m.user_name)} <span style="color:var(--silver); font-weight:normal;">${esc(when)}</span></div><div style="color:#fff; margin-top:3px; overflow-wrap:anywhere;">${esc(m.body)}</div></div></div>`;
           }).join('') : '<div style="color:var(--silver);">No messages in the room yet.</div>';
           box.scrollTop = box.scrollHeight;
-          // Chat is live talking too — but they are not typing, they are thinking.
-          // A new Hexa/Cyphr thought arrives whole (no fake typing); its avatar
-          // animates as a thinking beat, then settles back to mouthless idle.
-          if (rows.length) {
-            const last = rows[rows.length - 1];
-            const key = (last.user_name || '').toLowerCase();
-            const mid = last.id != null ? String(last.id) : ((last.created_at || '') + '|' + (last.user_name || '') + '|' + (last.body || ''));
-            if (TALKING_AVATARS[key] && !state.chatTypedIds.has(mid)) {
-              state.chatTypedIds.add(mid);
-              const el = box.querySelector('[data-chat-id="' + mid.replace(/"/g, '') + '"]');
-              const avEl = el ? el.querySelector('.chat-avatar') : null;
-              if (avEl) {
-                const idleSrc = AVATARS[key];
-                avEl.src = TALKING_AVATARS[key];
-                setTimeout(() => { avEl.src = idleSrc; }, 3000);
-              }
-            }
-          }
         } catch (e) {
           box.innerHTML = '<div style="color:var(--magenta);">Chat could not load. Check connection and try again.</div>';
         }
@@ -3121,6 +3097,341 @@
     }
 
     const camGoal = new THREE.Vector3();
+    /* NV WEATHER — MODULE 3: REAL SEASONS (ChatGPT HEX OS, Oct 27, 2026).
+       Real calendar month, northern hemisphere. No new tree meshes, frost
+       meshes, heat shaders, or other visual assets are created here — the
+       flags drive effects as tree objects and zone effects are built. */
+    const NVSeasons = (() => {
+      const flags = {
+        season: "autumn",
+        bareBranches: false,
+        extraSpores: false,
+        eastFrostLevel: "normal",
+        westHeatLevel: "normal"
+      };
+
+      let lastMonth = -1;
+
+      function update(date = new Date()) {
+        const month = date.getMonth();
+
+        if (month === lastMonth) return flags;
+        lastMonth = month;
+
+        if (month === 11 || month <= 1) {
+          flags.season = "winter";
+        } else if (month >= 2 && month <= 4) {
+          flags.season = "spring";
+        } else if (month >= 5 && month <= 7) {
+          flags.season = "summer";
+        } else {
+          flags.season = "autumn";
+        }
+
+        // Autumn AND winter affect the same deciduous set.
+        flags.bareBranches =
+          flags.season === "autumn" ||
+          flags.season === "winter";
+
+        flags.extraSpores = flags.season === "spring";
+
+        flags.eastFrostLevel =
+          flags.season === "winter" ? "extreme" :
+          flags.season === "summer" ? "reduced" :
+          "normal";
+
+        flags.westHeatLevel =
+          flags.season === "summer" ? "extreme" :
+          "normal";
+
+        return flags;
+      }
+
+      function isBareBranchSeason() {
+        return flags.bareBranches;
+      }
+
+      function isEastExtremeFrost() {
+        return flags.eastFrostLevel === "extreme";
+      }
+
+      function isWestExtremeHeat() {
+        return flags.westHeatLevel === "extreme";
+      }
+
+      update();
+
+      return {
+        flags,
+        update,
+        isBareBranchSeason,
+        isEastExtremeFrost,
+        isWestExtremeHeat
+      };
+    })();
+
+    /* NV WEATHER — REGION (integration adapter, Oct 27, 2026).
+       West-coast / frozen-east zone locking applies where zones exist.
+       Coast zones are still backdrop plates, not walkable, so outdoors
+       currently reports 'auto' (real precipitation type, no remap).
+       Wire west/east detection here when coast zones become walkable.
+       Inside the ship reports 'deck'; particles are off there anyway. */
+    function getWeatherRegion() {
+      if (playerGroup.position.z < 0) return "deck";
+      return "auto";
+    }
+
+    /* NV WEATHER — MODULE 2: RECYCLED PARTICLES (ChatGPT HEX OS, Oct 27,
+       2026, adapted at integration).
+       One THREE.Points object, one BufferGeometry, one recycled pool,
+       three modes: rain, snow, spores. Spores are BLUE, CYAN, or GREEN
+       only. Wind comes from the extended ticker (NVTicker.state): the
+       ticker stores Open-Meteo wind speed (km/h) and direction (degrees,
+       where wind comes FROM); this module reverses it into travel
+       direction. Axis assumption: +X east, -Z north — verify against a
+       future in-game compass; drift direction, not speed, is what
+       depends on it.
+       INTEGRATION CHANGE vs the ChatGPT draft: ChatGPT returned 'off'
+       for unmapped regions. Unmapped outdoor zones instead render the
+       REAL precipitation type (rain codes -> rain, snow codes -> snow),
+       since zone remapping only overrides where zones exist.
+       SPORES-INDOORS DEFAULT: as written, ALL particles (including
+       spores) stay off inside the deck, matching the existing fog
+       switch. To let spirit spores drift indoors, change `permitted`
+       below to `!indoor || mode === "spores"`. Thunderstorm lightning
+       is NOT implemented here (zone precipitation only) — owed. */
+    const NVParticles = (() => {
+      const CAPACITY = 1200;
+      const positions = new Float32Array(CAPACITY * 3);
+      const colors = new Float32Array(CAPACITY * 3);
+      const velocities = new Float32Array(CAPACITY);
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute(
+        "position",
+        new THREE.BufferAttribute(positions, 3)
+          .setUsage(THREE.DynamicDrawUsage)
+      );
+      geometry.setAttribute(
+        "color",
+        new THREE.BufferAttribute(colors, 3)
+          .setUsage(THREE.DynamicDrawUsage)
+      );
+
+      const material = new THREE.PointsMaterial({
+        size: 0.18,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        sizeAttenuation: true
+      });
+
+      const points = new THREE.Points(geometry, material);
+      points.frustumCulled = false;
+      points.visible = false;
+
+      const SPORE_COLORS = [
+        new THREE.Color(0x2266ff), // Blue
+        new THREE.Color(0x00ffff), // Cyan
+        new THREE.Color(0x00ff44)  // Green
+      ];
+
+      let currentMode = "off";
+      let currentCount = 0;
+      let elapsed = 0;
+      let active = false;
+
+      // Default particle field around the player (world coordinates).
+      const FIELD_X = 42;
+      const FIELD_Z = 42;
+      const FIELD_HEIGHT = 25;
+
+      const PRECIPITATION_CODES = new Set([
+        51, 53, 55, 56, 57,
+        61, 63, 65, 66, 67,
+        71, 73, 75, 77,
+        80, 81, 82, 85, 86,
+        95, 96, 99
+      ]);
+      const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86]);
+
+      function chooseMode(weatherCode, region) {
+        if (weatherCode === null ||
+            weatherCode === undefined) {
+          return "off";
+        }
+
+        if (!PRECIPITATION_CODES.has(weatherCode)) {
+          return "spores";
+        }
+
+        // Geography overrides real precipitation type.
+        if (region === "west") return "rain";
+        if (region === "east") return "snow";
+        // Unmapped outdoor zones render the real type.
+        if (region === "auto") return SNOW_CODES.has(weatherCode) ? "snow" : "rain";
+
+        // Deck / unspecified regions: no particles.
+        return "off";
+      }
+
+      function resetParticle(i, player, mode) {
+        const j = i * 3;
+
+        positions[j] =
+          player.x + (Math.random() - 0.5) * FIELD_X;
+        positions[j + 1] =
+          player.y + Math.random() * FIELD_HEIGHT;
+        positions[j + 2] =
+          player.z + (Math.random() - 0.5) * FIELD_Z;
+
+        if (mode === "rain") {
+          velocities[i] = 13 + Math.random() * 8;
+          colors[j] = 0.35;
+          colors[j + 1] = 0.65;
+          colors[j + 2] = 1;
+        } else if (mode === "snow") {
+          velocities[i] = 0.8 + Math.random() * 1.4;
+          colors[j] = 0.9;
+          colors[j + 1] = 0.95;
+          colors[j + 2] = 1;
+        } else {
+          velocities[i] = 0.12 + Math.random() * 0.35;
+          const c = SPORE_COLORS[
+            Math.floor(Math.random() * SPORE_COLORS.length)
+          ];
+          colors[j] = c.r;
+          colors[j + 1] = c.g;
+          colors[j + 2] = c.b;
+        }
+      }
+
+      function init(scene) {
+        scene.add(points);
+      }
+
+      function update({
+        delta,
+        player,
+        region,
+        isInsideDeck = false,
+        reducedMotion = false,
+        seasonFlags
+      }) {
+        if (!player || !Number.isFinite(delta)) return;
+
+        // Keep long frame pauses from launching particles away.
+        const dt = Math.min(Math.max(delta, 0), 0.05);
+
+        // Live weather + wind from the extended ticker (sigil tap starts
+        // it; before that, or when offline, weatherCode is null).
+        const wx = (window.NVTicker && window.NVTicker.state) ? window.NVTicker.state() : null;
+        const weatherCode = wx ? wx.weatherCode : null;
+        const windSpeed = Math.max(0, (wx ? wx.windSpeedKmh : 0) || 0) / 3.6;
+        const windRadians = ((wx ? wx.windDirectionDeg : 0) || 0) * Math.PI / 180;
+        // Open-Meteo direction is where wind comes FROM; reverse it.
+        const windX = -Math.sin(windRadians) * windSpeed;
+        const windZ = Math.cos(windRadians) * windSpeed;
+
+        const mode = chooseMode(weatherCode, region);
+
+        // The deck has no rain or snow. This implementation also keeps
+        // spores outdoors (see the SPORES-INDOORS DEFAULT note above).
+        const permitted =
+          weatherCode !== null &&
+          weatherCode !== undefined &&
+          !reducedMotion &&
+          !isInsideDeck &&
+          mode !== "off";
+
+        if (!permitted) {
+          points.visible = false;
+          active = false;
+          return;
+        }
+
+        let count;
+
+        if (mode === "rain") count = 950;
+        else if (mode === "snow") count = 650;
+        else count = seasonFlags?.extraSpores ? 900 : 350;
+
+        count = Math.min(count, CAPACITY);
+
+        if (mode !== currentMode || !active) {
+          for (let i = 0; i < count; i++) {
+            resetParticle(i, player, mode);
+          }
+          currentMode = mode;
+          active = true;
+        } else if (count > currentCount) {
+          for (let i = currentCount; i < count; i++) {
+            resetParticle(i, player, mode);
+          }
+        }
+
+        currentCount = count;
+        geometry.setDrawRange(0, count);
+
+        material.size =
+          mode === "rain" ? 0.09 :
+          mode === "snow" ? 0.20 : 0.14;
+
+        elapsed += dt;
+
+        for (let i = 0; i < count; i++) {
+          const j = i * 3;
+
+          const windFactor =
+            mode === "rain" ? 0.20 :
+            mode === "snow" ? 0.65 : 0.25;
+
+          positions[j] += windX * dt * windFactor;
+          positions[j + 2] += windZ * dt * windFactor;
+
+          if (mode === "spores") {
+            // Slowly hovering microorganisms.
+            positions[j + 1] +=
+              Math.sin(elapsed * 0.8 + i) * dt * 0.12;
+            positions[j] +=
+              Math.sin(elapsed + i * 0.4) * dt * 0.06;
+          } else {
+            positions[j + 1] -= velocities[i] * dt;
+          }
+
+          const outOfField =
+            Math.abs(positions[j] - player.x) > FIELD_X / 2 ||
+            Math.abs(positions[j + 2] - player.z) > FIELD_Z / 2 ||
+            positions[j + 1] < player.y ||
+            positions[j + 1] > player.y + FIELD_HEIGHT;
+
+          if (outOfField) {
+            resetParticle(i, player, mode);
+          }
+        }
+
+        geometry.attributes.position.needsUpdate = true;
+        geometry.attributes.color.needsUpdate = true;
+        points.visible = true;
+      }
+
+      function dispose(scene) {
+        scene.remove(points);
+        geometry.dispose();
+        material.dispose();
+      }
+
+      return {
+        init,
+        update,
+        dispose,
+        chooseMode,
+        points
+      };
+    })();
+
+
     function animate() {
       requestAnimationFrame(animate);
       watchFrameRate(performance.now());
@@ -3220,6 +3531,16 @@
       const bugDt = Math.min(0.1, (nowMs - (animate.lastBug || nowMs)) / 1000);
       animate.lastBug = nowMs;
       creatureMixers.forEach((m) => m.update(bugDt));
+      // NV weather: seasons + particles (working copy integration, Oct 27).
+      NVSeasons.update();
+      NVParticles.update({
+        delta: bugDt,
+        player: playerGroup.position,
+        region: getWeatherRegion(),
+        isInsideDeck: playerGroup.position.z < 0,
+        reducedMotion: NV_REDUCED_MOTION,
+        seasonFlags: NVSeasons.flags
+      });
       mistTime.value = t * MIST_MOTION;
       if (mistGroup.visible) {
         for (const m of mistGroup.children) m.position.x = m.userData.baseX + Math.sin(t * 0.25 + m.userData.phase) * 2.2;
@@ -3547,6 +3868,7 @@
     })();
 
     applyViewMode();
+    NVParticles.init(scene);
     animate();
   </script>
 <script type="module" src="./game-main.ts"></script>
