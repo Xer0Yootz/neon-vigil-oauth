@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Icon } from '../icons.jsx';
 import { AUTH_MODE } from '../auth.js';
 import { supabase, ROOM_ID, ensureChatSession } from '../supabase.js';
+import { NAME_MAX, NAME_MIN, nameErrorMessage, mentionsCharacter, AI_LABEL } from '../chatNames.js';
 
 const DISCORD_SERVER_ID = '';
 
@@ -16,7 +17,8 @@ export default function GroupChatPage(props) {
 
 const MAX_BODY = 2000;
 // Interim bitchat avatar rule (Oct 24, 2026, User's): only the AI
-// responders get portraits — Hexa and Cyphr, matched on sender name.
+// responders get portraits — Hexa and Cyphr. Matched on the AI flag the database sets
+// (is_ai + character_tag), so a player can never borrow a portrait by picking a name.
 // Everyone else shows no avatar for now; user-picked avatars
 // ("options for individuality") come later. Portraits live with the
 // game assets, so swapping those files upgrades game and chat together.
@@ -24,13 +26,15 @@ const RESPONDER_AVATARS = {
   hexa: `${import.meta.env.BASE_URL}gigas-garden/assets/portraits/hexa.png`,
   cyphr: `${import.meta.env.BASE_URL}gigas-garden/assets/portraits/cyphr.png`,
 };
-function responderAvatar(name) {
+function responderAvatar(name, tag) {
+  if (tag) return RESPONDER_AVATARS[tag] || null;
   if (!name) return null;
   const key = String(name).trim().toLowerCase();
   if (key === 'hexa' || key === 'hexa sigil') return RESPONDER_AVATARS.hexa;
   if (key === 'cyphr') return RESPONDER_AVATARS.cyphr;
   return null;
 }
+const MSG_COLS = 'id, user_id, user_name, body, created_at, is_ai, character_tag';
 const AVATAR_STYLE = { width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(255, 46, 136, 0.6)', flexShrink: 0 };
 
 
@@ -41,6 +45,11 @@ function SupabaseChat({ user }) {
   const [status, setStatus] = useState('Connecting');
   const [uid, setUid] = useState('');
   const [sending, setSending] = useState(false);
+  // undefined = still checking, null = no chat name yet, string = the claimed name
+  const [chatName, setChatName] = useState(undefined);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [claiming, setClaiming] = useState(false);
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -53,6 +62,9 @@ function SupabaseChat({ user }) {
         try {
           const session = await ensureChatSession();
           if (live) setUid(session.user.id);
+          const { data: prof, error: profErr } = await supabase
+            .from('profiles').select('display_name').eq('user_id', session.user.id).maybeSingle();
+          if (live) setChatName(profErr ? null : prof?.display_name ?? null);
         } catch (e) {
           if (live) setError(e.message);
         }
@@ -63,7 +75,7 @@ function SupabaseChat({ user }) {
           .subscribe((s) => live && setStatus(s === 'SUBSCRIBED' ? 'Live' : s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' ? 'Live updates paused' : 'Connecting'));
         const { data, error: readErr } = await supabase
           .from('messages')
-          .select('id, user_id, user_name, body, created_at')
+          .select(MSG_COLS)
           .eq('room_id', ROOM_ID)
           .order('created_at', { ascending: false })
           .limit(100);
@@ -88,34 +100,79 @@ function SupabaseChat({ user }) {
     event.preventDefault();
     setError('');
     const body = text.trim();
-    if (!body || !uid || sending) return;
+    if (!body || !uid || !chatName || sending) return;
     if (body.length > MAX_BODY) { setError(`Keep it under ${MAX_BODY} characters.`); return; }
     setSending(true);
+    // No user_name here: the database fills in your claimed chat name.
     const { data, error: sendErr } = await supabase
       .from('messages')
-      .insert({ room_id: ROOM_ID, user_id: uid, user_name: (user.name || 'User').slice(0, 60), body })
-      .select('id, user_id, user_name, body, created_at')
+      .insert({ room_id: ROOM_ID, user_id: uid, body })
+      .select(MSG_COLS)
       .single();
     setSending(false);
-    if (sendErr) { setError(sendErr.message || 'Send failed'); return; }
+    if (sendErr) {
+      if (sendErr.hint === 'name_required') setChatName(null);
+      setError(nameErrorMessage(sendErr) || 'Send failed');
+      return;
+    }
     setText('');
     setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]));
+    // @Hexa or @Cyphr: ask for one reply. The server checks everything again and may stay quiet
+    // (switched off, rate limit). The reply arrives through live updates like any other message.
+    if (mentionsCharacter(body)) {
+      supabase.functions.invoke('ai-chat', { body: { message_id: data.id } }).then(({ data: r, error: fnErr }) => {
+        if (fnErr) return; // not deployed yet, or switched off: chat keeps working without replies
+        if (r?.status === 'rate_limited') setError('Hexa and Cyphr need a moment. Try again shortly.');
+      }).catch(() => {});
+    }
+  };
+
+  const claimName = async (event) => {
+    event.preventDefault();
+    setNameError('');
+    const name = nameDraft.trim().replace(/\s+/g, ' ');
+    if (name.length < NAME_MIN || name.length > NAME_MAX) { setNameError(nameErrorMessage({ hint: 'name_invalid' })); return; }
+    setClaiming(true);
+    const { data, error: claimErr } = await supabase
+      .from('profiles').insert({ display_name: name }).select('display_name').single();
+    setClaiming(false);
+    if (claimErr) { setNameError(nameErrorMessage(claimErr)); return; }
+    setChatName(data.display_name);
   };
 
   return (
     <ChatFrame user={user} status={status}>
       <MessageList
-        items={messages.map((m) => ({ id: m.id, mine: m.user_id === uid, name: m.user_name, body: m.body }))}
+        items={messages.map((m) => ({
+          id: m.id, mine: !m.is_ai && m.user_id === uid, body: m.body,
+          name: m.is_ai ? AI_LABEL[m.character_tag] || m.user_name : m.user_name,
+          tag: m.is_ai ? m.character_tag : null,
+        }))}
         endRef={endRef}
       />
+      {uid && chatName === null ? (
+        <form className="form" onSubmit={claimName}>
+          <p className="hub-meta" style={{ fontSize: 12 }}>
+            Pick your chat name. You choose it once, and it is yours alone. Character names are kept for the characters.
+          </p>
+          <label>
+            <span>Chat name</span>
+            <input value={nameDraft} minLength={NAME_MIN} maxLength={NAME_MAX} onChange={(e) => setNameDraft(e.target.value)} placeholder="Your name in the room" autoComplete="nickname" />
+          </label>
+          {nameError && <p className="error">{nameError}</p>}
+          <button className="btn primary" type="submit" aria-label="Claim name" disabled={claiming}>Claim name</button>
+        </form>
+      ) : (
       <form className="form" onSubmit={send}>
+        {chatName && <p className="hub-meta" style={{ fontSize: 11, margin: 0 }}>Posting as {chatName}. Mention @Hexa or @Cyphr to ask them.</p>}
         <label>
           <span>Message</span>
           <input value={text} maxLength={MAX_BODY} onChange={(e) => setText(e.target.value)} placeholder="Type a message" />
         </label>
         {error && <p className="error">{error}</p>}
-        <button className="btn primary" type="submit" aria-label="Send" disabled={!uid || sending}>Send</button>
+        <button className="btn primary" type="submit" aria-label="Send" disabled={!uid || !chatName || sending}>Send</button>
       </form>
+      )}
     </ChatFrame>
   );
 }
@@ -152,7 +209,7 @@ function MessageList({ items, endRef }) {
     }}>
       {items.length === 0 && <p className="hub-meta" style={{ fontSize: 12 }}>No messages yet.</p>}
       {items.map((m) => {
-        const avatar = responderAvatar(m.name);
+        const avatar = m.tag ? responderAvatar(null, m.tag) : null;
         return (
         <div key={m.id} style={{ display: 'flex', justifyContent: m.mine ? 'flex-end' : 'flex-start', marginBottom: 8, alignItems: 'flex-start' }}>
           {avatar && !m.mine && <img src={avatar} alt={`${m.name} portrait`} style={{ ...AVATAR_STYLE, marginRight: 8 }} />}

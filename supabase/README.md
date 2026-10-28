@@ -8,6 +8,12 @@ The static GitHub Pages build talks to it straight from the browser with the pub
   - read: everyone (anon and signed-in)
   - insert: signed-in only, `auth.uid() = user_id`, body 1 to 2000 chars, name 1 to 60 chars;
     clients can only set room_id, user_id, user_name, body (no id/created_at); no update or delete.
+  - name lock (migrations `20261025233317`, `20261025233350`): a player must first claim a name in
+    `public.profiles` (once, unique, never a Neon Vigil character name from `public.reserved_names`).
+    The `messages_guard` trigger stamps every player message with that name and refuses any other.
+    `is_ai` / `character_tag` rows (Hexa, Cyphr) can only come from the service role.
+- `supabase/pending/`: migrations written but NOT applied (they need the owner's OK).
+- `supabase/functions/ai-chat`: Hexa/Cyphr replies. Not deployed. See `docs/howto/bitchat-name-lock-and-voices.md`.
 
 ## Auth
 The web app signs in with Google (Identity Services) and then hands the same ID token to
