@@ -30,9 +30,16 @@ there is one "file not found" line in the browser console. Remove those two line
 
 ## Status
 
-- The pull request was reviewed and merged into `main` with a normal merge (Jasmine's OK, Oct 25, 2026).
-- The live site was then updated with one normal commit on `gh-pages` that changed only `gigas-garden/index.html`,
-  adding the two gate lines. Nothing else on `gh-pages` changed. `auth-gate.js` was already there.
+- Pull request #4 was merged into `main` with a normal merge on Oct 25, 2026 at 12:57 PM PT (Jasmine's OK).
+  Merge commit: `ecb1523`.
+- The live site was then updated with one normal commit on `gh-pages`, `a496110`, that changed only
+  `gigas-garden/index.html`, adding the two gate lines. Nothing else on `gh-pages` changed. `auth-gate.js` was
+  already there. GitHub Pages finished updating a few minutes later, and a signed-out visit was checked on a
+  computer and on a phone held sideways: both went to the sign-in page.
+- Known issue, not caused by this change: the live sign-in page says "Sign-in is not configured:
+  VITE_GOOGLE_CLIENT_ID is missing from this build." That means nobody can sign in on the live site right now, so
+  the game is closed to everyone until the live site is rebuilt with the public Google client ID. Rebuilding needs
+  Jasmine's OK, because `deploy/build-pages.sh` is on hold.
 - `deploy/build-pages.sh` was **not** run. It stays on hold.
 
 ## How to test it
@@ -57,11 +64,10 @@ the address, or wait a few minutes for GitHub Pages to update.
 
 Never force-push. Each undo below is a new, normal commit.
 
-1. **Undo the live site:** on GitHub, open the `gh-pages` branch, find the commit that changed
-   `gigas-garden/index.html` to add the gate, and revert it (or run `git revert <that commit>` on `gh-pages`
-   and push). The live page goes back to having no gate.
+1. **Undo the live site:** revert commit `a496110` on the `gh-pages` branch: run `git revert a496110` on
+   `gh-pages` and push it normally. The live page goes back to having no gate.
 2. **Undo the code on `main`:** on the merged pull request page, click **Revert**. That opens a new pull request
-   that takes the change back out. Review it and merge it. (On the command line: `git revert -m 1 <merge commit>`.)
+   that takes the change back out. Review it and merge it. (On the command line: `git revert -m 1 ecb1523` on `main`, through a pull request.)
 3. Before a pull request is merged, undoing it is just closing it.
 
 ## Updating the live game page later (the safe way)
