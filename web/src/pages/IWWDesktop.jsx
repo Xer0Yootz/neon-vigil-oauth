@@ -137,7 +137,7 @@ export default function IWWDesktop({ user, character }) {
               <p>THRESHOLD.COM — Sutro Baths. Xero's home. Visor forms at will.</p>
             )}
             {openWindow === 'hull' && (
-              <p>SIX.HULL — Infiniti 6. Spoken flagship. Neon holds it.</p>
+              <p>SIX.HULL — infinity 6. Spoken flagship. Neon holds it.</p>
             )}
             {openWindow === 'specimen' && (
               <p>SPECIMEN.IDX — GRID bestiary. Not ownership. Praxia unbondable.</p>
@@ -175,6 +175,7 @@ export default function IWWDesktop({ user, character }) {
         color: '#000'
       }}>
         <span style={{ border: '1px solid #808080', borderTopColor: '#fff', padding: '1px 6px', marginRight: 8 }}>Start</span>
+        GRID OK | IWW VIEWPORT | DEEP TIME 5150 | QUEEN: PRAXIA
         {user && <span style={{ marginLeft: 'auto' }}>{user.name}</span>}
       </div>
     </div>

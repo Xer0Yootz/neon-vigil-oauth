@@ -2,7 +2,36 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../icons.jsx';
 import { AUTH_MODE, GOOGLE_CLIENT_ID, loadGoogleIdentity, userFromGoogleCredential, writeSession } from '../auth.js';
-import { supabaseSignInWithGoogle } from '../supabase.js';
+import { supabaseSignInWithGoogle, supabaseSignInWithGitHub } from '../supabase.js';
+
+function GitHubSignIn() {
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="btn ghost"
+        style={{ width: '100%', padding: '12px 0' }}
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError('');
+          try {
+            // Sends the browser to GitHub and back; App.jsx picks the session up on return.
+            await supabaseSignInWithGitHub();
+          } catch (e) {
+            setError(e.message);
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? 'Opening GitHub…' : 'Continue with GitHub'}
+      </button>
+      {error && <p className="error">{error}</p>}
+    </>
+  );
+}
 
 function GoogleSignIn({ setUser }) {
   const slot = useRef(null);
@@ -55,7 +84,13 @@ function SignInShell({ children, note }) {
 
 export default function LoginPage({ setUser }) {
   if (AUTH_MODE === 'google') {
-    return <SignInShell note="Sign in to play Gigas Garden and open chat."><GoogleSignIn setUser={setUser} /></SignInShell>;
+    return (
+      <SignInShell note="Sign in to play Gigas Garden and open chat. Google and GitHub accounts with the same email are the same Neon Vigil identity — linked automatically, no separate accounts.">
+        <GoogleSignIn setUser={setUser} />
+        <div className="divider"><span>or</span></div>
+        <GitHubSignIn />
+      </SignInShell>
+    );
   }
   if (AUTH_MODE === 'mock') {
     return (
