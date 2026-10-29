@@ -107,12 +107,12 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   }));
 }
 
-// Gigas Garden and its My Room page (infiniti6-rooms) are gated: no session sends the visitor to sign-in, then back to
+// Gigas Garden and its My Room page (Infinity_6-rooms) are gated: no session sends the visitor to sign-in, then back to
 // the page. Signed-in visitors get the page with the hub/chat icons from auth-gate.js. Each page file carries the gate
 // tag; here its mode is set to server.
 const GATE_TAG = '<script src="../auth-gate.js" data-mode="server"></script>';
 const GATE_RE = /<script\b[^>]*\bsrc="[^"]*auth-gate\.js"[^>]*><\/script>/i; // the page file carries its own tag
-for (const dir of ['gigas-garden', 'infiniti6-rooms']) {
+for (const dir of ['gigas-garden', 'Infinity_6-rooms']) {
   const file = path.join(process.cwd(), 'web', 'public', dir, 'index.html');
   app.use(`/${dir}`, (req, res, next) => {
     if (req.path !== '/' && req.path !== '/index.html') return next();
@@ -312,10 +312,17 @@ app.post('/api/bitchat/groups', (req, res) => {
 
 app.post('/api/bitchat/send', (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ message: 'Not authenticated.' });
-  const { recipientId, groupId, ciphertext, nonce } = req.body || {};
+  const { recipientId, groupId, ciphertext, nonce, senderName } = req.body || {};
   if (!ciphertext || !nonce) return res.status(400).json({ message: 'Missing message data.' });
   const user = db.findUserById(req.user.id);
-  bitChat.saveMessage(req.user.id, user.name, recipientId, ciphertext, nonce, groupId);
+  // Chat name picker (ported from 5150, Oct 28, 2026): an optional
+  // display name chosen on the chat page. Trimmed and capped; falls
+  // back to the account name. sender_id still identifies the real
+  // author, so this only changes the name other people see.
+  const displayName = (typeof senderName === 'string' && senderName.trim())
+    ? senderName.trim().slice(0, 40)
+    : user.name;
+  bitChat.saveMessage(req.user.id, displayName, recipientId, ciphertext, nonce, groupId);
   res.json({ message: 'Sent.' });
 });
 
