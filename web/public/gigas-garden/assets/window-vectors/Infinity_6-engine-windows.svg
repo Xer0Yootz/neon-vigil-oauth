@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1280" width="1920" height="1280">
+  <title>infinity 6 engine room windows</title>
+  <desc>White window placeholders with green outlines, sized to match the 1920x1280 infinity 6 interior still. Layer over the still in post; place any background behind the white shapes, or delete the white fill to use the shapes as a transparent mask.</desc>
+  <rect x="0" y="430" width="200" height="360" rx="24" stroke="#00c853" stroke-width="10" fill="#ffffff"/>
+  <rect x="330" y="320" width="190" height="270" rx="20" stroke="#00c853" stroke-width="10" fill="#ffffff"/>
+  <rect x="1400" y="320" width="190" height="270" rx="20" stroke="#00c853" stroke-width="10" fill="#ffffff"/>
+  <rect x="1720" y="430" width="200" height="360" rx="24" stroke="#00c853" stroke-width="10" fill="#ffffff"/>
+</svg>
