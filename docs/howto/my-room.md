@@ -1,4 +1,4 @@
-# My Room: going from the Bridge Console to your infinity 6 quarters
+# My Room: going from the Bridge Console to your Infinity 6 quarters
 
 Branch `neon-vigil/my-room`. Nothing here is live. It reaches the public site only when you merge it and say to publish.
 
@@ -65,5 +65,5 @@ Note: going back to the Bridge reloads the game, so you start from the title car
   Should these move to the violet-black Garden palette?
 - **Q2. Personal rooms.** Canon has "quarters" and "berths a cramped complement of one thousand", but nothing about a player's own room or decorating one. Is this OK as a game feature?
 - **Q3. The radio.** Room v2 streams outside internet stations (Jerome FM, Sutro FM, Nightride, SSR, Chillsynth, Yumi Co). Canon has Cyphr as the ship's sound system. Should it stay, or switch to Cyphr's own music?
-- **Q4. The room names.** The page title is "Room v2 — infinity 6", and the rooms are Quarters A, Quarters B and Mess. Do you want different names?
+- **Q4. The room names.** The page title is "Room v2 — Infinity 6", and the rooms are Quarters A, Quarters B and Mess. Do you want different names?
 - **Q5. Faint pink tint.** The room's screen tint has a very faint magenta wash, and SHIP_CANON says "no pink fog or pink haze on board". It's a UI tint, not fog. Keep it?

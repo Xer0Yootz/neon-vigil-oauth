@@ -137,7 +137,7 @@ export default function IWWDesktop({ user, character }) {
               <p>THRESHOLD.COM — Sutro Baths. Xero's home. Visor forms at will.</p>
             )}
             {openWindow === 'hull' && (
-              <p>SIX.HULL — infinity 6. Spoken flagship. Neon holds it.</p>
+              <p>SIX.HULL — Infinity 6. Spoken flagship. Neon holds it.</p>
             )}
             {openWindow === 'specimen' && (
               <p>SPECIMEN.IDX — GRID bestiary. Not ownership. Praxia unbondable.</p>

@@ -3,7 +3,7 @@
 <head>
   <!-- Neon Vigil sign-in gate. Keep this tag when copying this file to gh-pages; the build and backend set data-mode. -->
   <script src="../auth-gate.js" data-mode="google"></script>
-  <!-- My Room test link: ?stage=room opens the infinity 6 room page straight away (same sign-in session). -->
+  <!-- My Room test link: ?stage=room opens the Infinity 6 room page straight away (same sign-in session). -->
   <script>
     (function () {
       try {
@@ -964,7 +964,7 @@
         name: 'BALT-SHELL CARRIER',
         caste: 'HAULER',
         powerSet: '+2 Carry Capacity per synced Hauler · Sync: DIG',
-        desc: 'Biological chitin carapace, 4% readable face, immune to acidic First Water. Moves fallen stone and salvage around the infinity 6 hull.',
+        desc: 'Biological chitin carapace, 4% readable face, immune to acidic First Water. Moves fallen stone and salvage around the Infinity 6 hull.',
         canSync: true
       },
       warden: {
@@ -1167,7 +1167,7 @@
     const container = document.getElementById('viewport-container');
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x07030d);
-    // Exterior violet-pink fog (kept off when inside infinity 6 deck). Lighter density;
+    // Exterior violet-pink fog (kept off when inside Infinity 6 deck). Lighter density;
     // the Drive plates ignore fog and use their own haze gradient instead.
     const gardenFog = new THREE.FogExp2(0xc23d8f, 0.012);
 
@@ -1296,7 +1296,7 @@
     const worldGroup = new THREE.Group();
     scene.add(worldGroup);
 
-    // Zone 1: infinity 6 Interior Deck & Ramp (z: -18 to 0) — Zero pink fog inside
+    // Zone 1: Infinity 6 Interior Deck & Ramp (z: -18 to 0) — Zero pink fog inside
     const deckFloor = new THREE.Mesh(
       new THREE.BoxGeometry(14, 0.5, 20),
       new THREE.MeshStandardMaterial({ color: 0x120c1f, metalness: 0.7, roughness: 0.3 })
@@ -2072,8 +2072,7 @@
     playerGroup.position.set(0, 0, -16);
     scene.add(playerGroup);
 
-    
-    function buildProceduralNeonUltra() {
+        function buildProceduralNeonUltra() {
       const g = new THREE.Group();
       // Legs & Boots
       const legs = new THREE.Mesh(
