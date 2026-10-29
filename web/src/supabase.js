@@ -23,6 +23,63 @@ export async function supabaseSignInWithGoogle(idToken) {
   return data.session;
 }
 
+// GitHub sign-in on Pages, via Supabase OAuth (no secret in the browser build).
+// Needs the GitHub provider turned on in the Supabase dashboard with a GitHub
+// OAuth App whose callback is the Supabase callback URL. Scope is email only:
+// read the user's email + profile, never repo access. The browser is sent to
+// GitHub and back to the app root; App.jsx then picks the session up and
+// follows the saved ?next= destination (e.g. the game page).
+export async function supabaseSignInWithGitHub() {
+  if (!supabase) throw new Error('GitHub sign-in is not configured on this build.');
+  const redirectTo = window.location.origin + (import.meta.env.BASE_URL || '/');
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'github',
+    options: { redirectTo, scopes: 'read:user user:email' }
+  });
+  if (error) throw new Error(error.message);
+}
+
+// After a Supabase OAuth return (GitHub, or Google via Supabase), turn the
+// Supabase session into an app session. The session id is the email, so a
+// Google sign-in and a GitHub sign-in with the SAME email are the SAME Neon
+// Vigil identity at app level — automatic linking, the way the server backend
+// merges by email — with no link/unlink controls. True Supabase identity
+// linking (linkIdentity) is a later Options step, not this one.
+export async function supabaseSessionUser() {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  const u = data.session?.user;
+  if (!u || !u.email) return null;
+  const meta = u.app_metadata || {};
+  const provider = (u.identities?.[0]?.provider) || meta.provider || 'github';
+  return {
+    id: u.email,
+    name: u.user_metadata?.full_name || u.user_metadata?.name || u.email,
+    email: u.email,
+    provider,
+    githubUsername: u.user_metadata?.user_name || u.user_metadata?.preferred_username || '',
+    exp: (data.session.expires_at ? data.session.expires_at * 1000 : Date.now() + 8 * 60 * 60 * 1000)
+  };
+}
+
+// Owner-only second step: grant repo access to the OWNER GitHub account.
+// The normal Pages GitHub sign-in above asks for read:user + user:email ONLY,
+// so ordinary players never get repo scope. This function re-runs GitHub
+// OAuth with the `repo` scope and is only offered when the signed-in GitHub
+// login is Xer0Yootz — the owner's GitHub account, the one tied to
+// bookings@jasmineinfiniti.com, modelmommi@gmail.com and msjasminemckay@gmail.com.
+// Those three emails are the owner identity at app level; they are NOT
+// hard-coded in the repo — the gate here is the public GitHub login name.
+export async function supabaseRequestRepoAccess() {
+  if (!supabase) throw new Error('GitHub sign-in is not configured on this build.');
+  const redirectTo = window.location.origin + (import.meta.env.BASE_URL || '/');
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'github',
+    options: { redirectTo, scopes: 'repo' }
+  });
+  if (error) throw new Error(error.message);
+}
+
 // Makes sure there is a Supabase session so row level security can check auth.uid() on insert.
 // Order: existing session (Google or anonymous) > anonymous sign-in.
 export async function ensureChatSession() {

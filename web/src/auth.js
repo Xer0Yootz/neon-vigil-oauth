@@ -25,6 +25,8 @@ export function writeSession(user, ttlMs = 8 * 60 * 60 * 1000) {
     name: user.name || 'User',
     email: user.email || '',
     provider: user.provider || AUTH_MODE,
+    // GitHub login name, when known (used only to gate owner-only actions).
+    githubUsername: user.githubUsername || '',
     exp: user.exp || Date.now() + ttlMs
   };
   localStorage.setItem(SESSION_KEY, JSON.stringify(s));

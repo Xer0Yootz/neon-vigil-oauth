@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <meta name="theme-color" content="#050208" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23050208'/%3E%3Cpath d='M2 4h12v8H2z' fill='none' stroke='%2300f0ff' stroke-width='1'/%3E%3Cpath d='M2 8h12' stroke='%23ff1e8a' stroke-width='1'/%3E%3C/svg%3E" />
-  <title>Room v2 — Infiniti 6</title>
+  <title>Room v2 — infinity 6</title>
   <style>
     :root {
       --bg-black: #050208;
@@ -112,6 +112,18 @@
       gap: 6px;
       flex-wrap: wrap;
     }
+
+    /* Audio cluster (controls LOCK, Oct 28, 2026): top-right, same
+       place and order as the game's audio controls. Touch devices get
+       larger targets; position and order never change per screen. */
+    .audio-cluster {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-left: auto;
+    }
+    html.touch-ui .hud-btn { min-height: 48px; }
+    html.touch-ui .audio-cluster input[type="range"] { height: 28px; }
 
     .status-row {
       flex: 1 0 200px;
@@ -269,7 +281,7 @@
       <a class="hud-btn back-btn" id="back-bridge" href="../gigas-garden/" title="Back to the Bridge">BACK TO BRIDGE</a>
       <div class="brand">
         <h1>Room v2</h1>
-        <p class="sub">Infiniti 6</p>
+        <p class="sub">infinity 6</p>
       </div>
       <div class="tabs" role="tablist" aria-label="Rooms">
         <button type="button" class="hud-btn" role="tab" data-room="quarters-a">Quarters A</button>
@@ -279,6 +291,13 @@
       <div class="tabs" role="group" aria-label="Mode">
         <button type="button" class="hud-btn" id="mode-live" aria-pressed="true">Live</button>
         <button type="button" class="hud-btn" id="mode-edit" aria-pressed="false">Edit</button>
+      </div>
+      <!-- Audio cluster (controls LOCK, Oct 28, 2026): Play + Volume sit
+           top-right here, in the same place and order as the game's
+           top-bar audio controls — button first, slider second. -->
+      <div class="audio-cluster" role="group" aria-label="Audio">
+        <button type="button" class="hud-btn" id="btn-radio" aria-pressed="false">Play</button>
+        <input id="radio-vol" type="range" min="0" max="1" step="0.05" value="0.7" aria-label="Radio volume" style="width:90px; accent-color:#00f0ff;">
       </div>
       <div class="status-row">
         <p id="status" aria-live="polite">Loading room…</p>
@@ -321,11 +340,7 @@
         <label class="vol">Station
           <select id="radio-station" aria-label="Radio station"></select>
         </label>
-        <button type="button" class="hud-btn" id="btn-radio" aria-pressed="false">Play</button>
         <a class="hud-btn" id="radio-site" href="https://jeromefm.live/" target="_blank" rel="noopener noreferrer">Station site</a>
-        <label class="vol">Vol
-          <input id="radio-vol" type="range" min="0" max="1" step="0.05" value="0.7" aria-label="Radio volume">
-        </label>
         <p id="radio-note" class="hint"></p>
       </div>
       <div class="actions" role="toolbar" aria-label="Edit">
@@ -352,7 +367,22 @@
     }
   </script>
   <script type="module">
-    const STORAGE_KEY = 'nv.infiniti6.rooms.v1';
+    const STORAGE_KEY = 'nv.Infinity_6.rooms.v1';
+    // Old keys (nv.infinity6.* / nv.infiniti6.*) kept as read-only fallbacks so
+    // saved rooms are not wiped by the spelling fix — first read migrates it.
+    const OLD_STORAGE_KEYS = ['nv.infinity6.rooms.v1', 'nv.infiniti6.rooms.v1'];
+    function storedRoomRaw() {
+      try {
+        for (const key of [STORAGE_KEY, ...OLD_STORAGE_KEYS]) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            if (key !== STORAGE_KEY) localStorage.setItem(STORAGE_KEY, raw);
+            return raw;
+          }
+        }
+        return null;
+      } catch (err) { return null; }
+    }
     const boot = document.getElementById('boot-msg');
     const statusEl = document.getElementById('status');
     const savePill = document.getElementById('save-pill');
@@ -363,6 +393,10 @@
     const btnSave = document.getElementById('btn-save');
 
     const coarse = window.matchMedia('(pointer: coarse)').matches;
+    // Tablet/iPad (controls LOCK, Oct 28, 2026): iPadOS reports a
+    // Mac-style platform with touch points, so treat that as touch too.
+    const isTouchDevice = coarse || (navigator.maxTouchPoints > 0 && navigator.platform === 'MacIntel');
+    if (isTouchDevice) document.documentElement.classList.add('touch-ui');
     const hudEl = document.getElementById('hud');
     const modeLiveBtn = document.getElementById('mode-live');
     const modeEditBtn = document.getElementById('mode-edit');
@@ -371,7 +405,7 @@
 
     function readStoredMode() {
       try {
-        const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        const data = JSON.parse(storedRoomRaw() || 'null');
         if (data && data.mode === 'edit') return 'edit';
       } catch (err) { /* live until a layout is stored */ }
       return 'live';
@@ -412,8 +446,10 @@
     bootRadio();
 
     function bootRadio() {
-      const RADIO_KEY = 'nv.infiniti6.radio.v1';
+      const RADIO_KEY = 'nv.Infinity_6.radio.v1';
+      const OLD_RADIO_KEYS = ['nv.infinity6.radio.v1', 'nv.infiniti6.radio.v1'];
       const STATIONS = [
+        { id: 'theme', name: 'Neon Vigil Theme', url: '../gigas-garden/assets/neon-vigil-theme.mp3', site: '' },
         { id: 'jerome', name: 'Jerome FM', url: 'https://radio.jeromefm.live/stream', site: 'https://jeromefm.live/' },
         { id: 'ssr1', name: 'SSR Ambient', url: 'https://systrum.net:8443/SSR1', site: 'https://systrum.net/' },
         { id: 'ssr2', name: 'SSR Electronic', url: 'https://systrum.net:8443/SSR2', site: 'https://systrum.net/' },
@@ -441,7 +477,15 @@
 
       function readPrefs() {
         try {
-          const data = JSON.parse(localStorage.getItem(RADIO_KEY) || '{}');
+          let raw = null;
+          for (const key of [RADIO_KEY, ...OLD_RADIO_KEYS]) {
+            raw = localStorage.getItem(key);
+            if (raw) {
+              if (key !== RADIO_KEY) localStorage.setItem(RADIO_KEY, raw);
+              break;
+            }
+          }
+          const data = JSON.parse(raw || '{}');
           return data && typeof data === 'object' ? data : {};
         } catch (err) {
           return {};
@@ -467,8 +511,16 @@
         const station = current();
         btn.setAttribute('aria-pressed', on ? 'true' : 'false');
         btn.textContent = on ? 'Stop' : 'Play';
-        site.href = station.site;
-        site.title = 'Open ' + station.name;
+        // Theme has no station site — hide the site link instead of pointing it at "null".
+        if (station.site) {
+          site.href = station.site;
+          site.title = 'Open ' + station.name;
+          site.style.display = '';
+        } else {
+          site.removeAttribute('href');
+          site.title = station.name;
+          site.style.display = 'none';
+        }
       }
 
       function stop() {
@@ -711,7 +763,7 @@
 
       function loadState() {
         try {
-          const raw = localStorage.getItem(STORAGE_KEY);
+          const raw = storedRoomRaw();
           if (!raw) return freshState();
           const data = JSON.parse(raw);
           if (!data || data.v !== 1 || !data.rooms) return freshState();
@@ -797,6 +849,40 @@
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x07030c);
       scene.fog = new THREE.Fog(0x07030c, 18, 42);
+
+      // Val avatar in Live mode (Oct 28, 2026): the rigged Val GLB,
+      // copied into this room folder as val-rigged.glb. Shown only in
+      // Live mode, hidden in Edit mode, standing in the room. Scaled
+      // from its bounding box to about 1.7 m tall, first animation
+      // clip looping if the model has one. If the file fails to load,
+      // the room still works, with a console warning only.
+      let valAvatar = null;
+      let valMixer = null;
+      const valClock = new THREE.Clock();
+      (async () => {
+        try {
+          const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+          const loader = new GLTFLoader();
+          const gltf = await loader.loadAsync('val-rigged.glb');
+          valAvatar = gltf.scene;
+          const box = new THREE.Box3().setFromObject(valAvatar);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          if (size.y > 0) valAvatar.scale.setScalar(1.7 / size.y);
+          const centre = new THREE.Vector3();
+          box.getCenter(centre);
+          valAvatar.position.set(room().w / 2 - centre.x * valAvatar.scale.x, -box.min.y * valAvatar.scale.y, room().d / 2 - centre.z * valAvatar.scale.z);
+          valAvatar.userData.roomOffset = { x: centre.x * valAvatar.scale.x, z: centre.z * valAvatar.scale.z };
+          valAvatar.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          if (gltf.animations && gltf.animations.length) {
+            valMixer = new THREE.AnimationMixer(valAvatar);
+            valMixer.clipAction(gltf.animations[0]).play();
+          }
+          valAvatar.visible = !editing();
+          scene.add(valAvatar);
+        } catch (err) { console.warn('Val avatar did not load', err); }
+      })();
+      function syncValAvatar() { if (valAvatar) valAvatar.visible = !editing(); }
 
       const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 80);
       const controls = new OrbitControls(camera, renderer.domElement);
@@ -904,7 +990,7 @@
         else el.style.cursor = 'default';
       }
 
-      function syncModeChrome() {
+      function syncModeChrome() { syncValAvatar();
         controls.mouseButtons.LEFT = editing() ? -1 : THREE.MOUSE.ROTATE;
         controls.touches.ONE = editing() ? -1 : THREE.TOUCH.ROTATE;
         controls.enabled = true;
@@ -1167,6 +1253,10 @@
       }
 
       function rebuild() {
+        if (valAvatar && valAvatar.userData.roomOffset) {
+          valAvatar.position.x = room().w / 2 - valAvatar.userData.roomOffset.x;
+          valAvatar.position.z = room().d / 2 - valAvatar.userData.roomOffset.z;
+        }
         if (roomRoot) {
           scene.remove(roomRoot);
           disposeGroup(roomRoot);
@@ -1628,6 +1718,8 @@
             });
           }
         }
+        if (valAvatar) valAvatar.visible = !editing();
+        if (valMixer) valMixer.update(valClock.getDelta());
         panBuildCamera();
         if (editing() && wallView === 'follow') applyWalls();
         controls.update();
