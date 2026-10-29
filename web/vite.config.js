@@ -5,8 +5,8 @@ import path from 'node:path';
 
 const GATE_TAG = /<script\b[^>]*\bsrc="[^"]*auth-gate\.js"[^>]*><\/script>/i;
 const AUTH_MODE = (process.env.VITE_AUTH_MODE || 'server').toLowerCase();
-// Pages behind the sign-in gate: the Gigas Garden game and its My Room page (Infiniti 6 quarters, Room v2).
-const GATED_PAGES = ['gigas-garden', 'infiniti6-rooms'];
+// Pages behind the sign-in gate: the Gigas Garden game and its My Room page (infinity 6 quarters, Room v2).
+const GATED_PAGES = ['gigas-garden', 'Infinity_6-rooms'];
 
 // Puts the sign-in gate (public/auth-gate.js) in front of each gated page with the right data-mode.
 // Dev: served on the fly. Build: written into dist.
